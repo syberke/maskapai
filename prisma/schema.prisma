@@ -1,0 +1,211 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ==========================================
+// 1. ENUMS (Mendukung Validasi Statis & Midtrans)
+// ==========================================
+
+enum Role {
+  USER
+  ADMIN
+  MANAGER
+}
+
+enum SeatClass {
+  ECONOMY
+  BUSINESS
+  FIRST_CLASS
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  EXPIRED
+}
+
+enum PaymentStatus {
+  UNPAID
+  PAID
+  FAILED
+  REFUNDED
+}
+
+// ==========================================
+// 2. USER MANAGEMENT & SECURITY (Termasuk OTP)
+// ==========================================
+
+model User {
+  id              Int              @id @default(autoincrement())
+  name            String           @db.VarChar(255)
+  email           String           @unique @db.VarChar(255)
+  password        String           @db.VarChar(255)
+  role            Role             @default(USER)
+  isVerified      Boolean          @default(false)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  
+  // Relasi
+  otps            OtpVerification[]
+  bookings        Booking[]
+}
+
+model OtpVerification {
+  id        Int      @id @default(autoincrement())
+  code      String   @db.VarChar(6)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  userId    Int
+  
+  // Relasi ke User
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ==========================================
+// 3. FLIGHT & CORE LOGISTICS DATA (Sesuai PDM Bandara & Jadwal)
+// ==========================================
+
+model Airport {
+  id        Int      @id @default(autoincrement())
+  code      String   @unique @db.VarChar(10) // Contoh: CGK, SUB, DPS
+  name      String   @db.VarChar(255)
+  city      String   @db.VarChar(255)
+  country   String   @db.VarChar(255)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relasi sebagai asal dan tujuan penerbangan
+  departureFlights Flight[] @relation("DepartureAirport")
+  arrivalFlights   Flight[] @relation("ArrivalAirport")
+}
+
+model Airline {
+  id        Int      @id @default(autoincrement())
+  name      String   @db.VarChar(255)
+  code      String   @unique @db.VarChar(10) // Contoh: GA, QZ, JT
+  logoUrl   String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relasi
+  planes    Plane[]
+}
+
+model Plane {
+  id        Int      @id @default(autoincrement())
+  name      String   @db.VarChar(255) // Contoh: Boeing 737-800
+  code      String   @unique @db.VarChar(50)  // Registrasi Pesawat: PK-GFA
+  airlineId Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relasi
+  airline   Airline  @relation(fields: [airlineId], references: [id], onDelete: Cascade)
+  flights   Flight[]
+}
+
+model Flight {
+  id                 Int          @id @default(autoincrement())
+  flightNumber       String       @unique @db.VarChar(50) // Contoh: GA-204
+  planeId            Int
+  departureAirportId Int
+  arrivalAirportId   Int
+  departureTime      DateTime
+  arrivalTime        DateTime
+  priceEconomy       Decimal      @db.Decimal(12, 2)
+  priceBusiness      Decimal      @db.Decimal(12, 2)
+  priceFirstClass    Decimal      @db.Decimal(12, 2)
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  // Relasi Induk
+  plane            Plane     @relation(fields: [planeId], references: [id], onDelete: Cascade)
+  departureAirport Airport   @relation("DepartureAirport", fields: [departureAirportId], references: [id], onDelete: Cascade)
+  arrivalAirport   Airport   @relation("ArrivalAirport", fields: [arrivalAirportId], references: [id], onDelete: Cascade)
+  
+  // Relasi Anak
+  flightSeats      FlightSeat[]
+  bookings         Booking[]
+}
+
+// ==========================================
+// 4. SEATING LOGIC (Mencegah Race Condition Pemilihan Kursi)
+// ==========================================
+
+model FlightSeat {
+  id             Int       @id @default(autoincrement())
+  flightId       Int
+  seatNumber     String    @db.VarChar(10) // Contoh: 12A, 14B
+  seatClass      SeatClass
+  isAvailable    Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  // Relasi Induk
+  flight         Flight    @relation(fields: [flightId], references: [id], onDelete: Cascade)
+  
+  // Relasi Anak
+  bookingSeats   BookingSeat[]
+
+  // Constraint Unik Gabungan: Menjamin dalam 1 jadwal penerbangan, nomor kursi tidak boleh ganda di database level.
+  @@unique([flightId, seatNumber])
+}
+
+// ==========================================
+// 5. TRANSACTION & PAYMENT (Integrasi Midtrans & PWA Manifest)
+// ==========================================
+
+model Booking {
+  id            Int           @id @default(autoincrement())
+  bookingCode   String        @unique @db.VarChar(100) // Kode Booking Unik untuk PWA / QR Code
+  userId        Int
+  flightId      Int
+  totalPrice    Decimal       @db.Decimal(12, 2)
+  status        BookingStatus @default(PENDING)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // Relasi Induk
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  flight       Flight        @relation(fields: [flightId], references: [id], onDelete: Cascade)
+  
+  // Relasi Anak
+  bookingSeats BookingSeat[]
+  payment      Payment?
+}
+
+model BookingSeat {
+  id             Int        @id @default(autoincrement())
+  bookingId      Int
+  flightSeatId   Int
+  passengerName  String     @db.VarChar(255) // Data Manifest Penumpang (Penting untuk E-Ticket)
+  passengerNik   String     @db.VarChar(20)  // NIK untuk validasi manifes penerbangan resmi
+  createdAt      DateTime   @default(now())
+
+  // Relasi Induk
+  booking        Booking    @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  flightSeat     FlightSeat @relation(fields: [flightSeatId], references: [id], onDelete: Cascade)
+
+  // Constraint Unik Gabungan: Menghindari manifest kursi yang sama didaftarkan ganda pada satu booking ID
+  @@unique([bookingId, flightSeatId])
+}
+
+model Payment {
+  id            Int           @id @default(autoincrement())
+  bookingId     Int           @unique // One-to-One dengan Booking
+  invoiceNumber String        @unique @db.VarChar(100)
+  amount        Decimal       @db.Decimal(12, 2)
+  paymentStatus PaymentStatus @default(UNPAID)
+  snapToken     String?       @db.Text // Token dari Midtrans Snap API
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // Relasi Induk
+  booking       Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+}
