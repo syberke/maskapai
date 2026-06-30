@@ -34,13 +34,36 @@ export async function POST(request: Request) {
 
         const midtransData = await response.json();
 
-        // 3. Kalau kata Midtrans sudah dibayar (settlement), kita ubah DB lokal kita sendiri
-        if (midtransData.transaction_status === "settlement" || midtransData.transaction_status === "capture") {
+        // 3. Proses status dari Midtrans dan update DB lokal
+        const transactionStatus = midtransData.transaction_status;
+
+        if (transactionStatus === "settlement" || transactionStatus === "capture") {
             await prisma.booking.update({
                 where: { id: booking.id },
-                data: { status: "CONFIRMED" },
+                data: { 
+                    status: "CONFIRMED",
+                    payment: {
+                        update: {
+                            paymentStatus: "PAID"
+                        }
+                    }
+                },
             });
             return NextResponse.json({ status: "CONFIRMED" });
+        } else if (["deny", "cancel", "expire"].includes(transactionStatus)) {
+            const newBookingStatus = transactionStatus === "expire" ? "EXPIRED" : "CANCELLED";
+            await prisma.booking.update({
+                where: { id: booking.id },
+                data: {
+                    status: newBookingStatus,
+                    payment: {
+                        update: {
+                            paymentStatus: "FAILED"
+                        }
+                    }
+                }
+            });
+            return NextResponse.json({ status: newBookingStatus });
         }
 
         return NextResponse.json({ status: booking.status });

@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Navbar from "./components/Navbar";
 import HeroSection from "./components/HeroSection";
 import SearchForm from "./components/SearchForm";
@@ -38,7 +39,13 @@ export default async function HomePage() {
         <HeroSection />
 
         {/* 3. Form Pencarian Dinamis dengan Passing Data Bandara */}
-        <SearchForm airports={airports} isHome={true} />
+        <Suspense fallback={
+          <div className="max-w-4xl mx-auto bg-white rounded-3xl p-6 shadow-sm border border-slate-100 animate-pulse h-28 flex items-center justify-center">
+            <span className="text-xs text-slate-400 font-bold">Memuat Form Pencarian...</span>
+          </div>
+        }>
+          <SearchForm airports={airports} isHome={true} />
+        </Suspense>
 
         {/* 4. Bagian Penawaran Diskon & Promo */}
         <Information />

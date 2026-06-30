@@ -22,11 +22,13 @@ export default function CheckoutPage({ params }: PageProps) {
     useEffect(() => {
         async function fetchBookingDetail() {
             try {
-                // Kita bisa bypass langsung mengambil data via fetch ke route internal atau membuat API ringkas, 
-                // Namun untuk simulasi cepat kita gunakan rute mock object yang aman:
-                const res = await fetch(`/api/bookings`);
-                // *Tips: Jika kamu punya API GET detail, bisa arahkan ke `/api/bookings/${bookingId}`*
-                setBooking({ id: bookingId, bookingCode: "RGG-SIMULATION", totalPrice: 750000 });
+                const res = await fetch(`/api/bookings?id=${bookingId}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    setBooking(data);
+                } else {
+                    console.error("Gagal memuat detail booking.");
+                }
             } catch (err) {
                 console.error(err);
             } finally {
@@ -71,21 +73,34 @@ export default function CheckoutPage({ params }: PageProps) {
 
             // 3. Panggil jendela kasir Snap pop-up Midtrans di atas browser
             (window as any).snap.pay(data.token, {
-                onSuccess: function (result: any) {
+                onSuccess: async function (result: any) {
                     alert("Pembayaran Sukses! Selamat Terbang.");
                     console.log(result);
-                    // Arahkan ke halaman sukses/tiket di sini
+                    // Pemicu sinkronisasi status ke DB secara langsung
+                    try {
+                        await fetch("/api/bookings/check-status", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ bookingId }),
+                        });
+                    } catch (err) {
+                        console.error("Gagal auto-update status pembayaran:", err);
+                    }
+                    window.location.href = "/dashboard/bookings";
                 },
                 onPending: function (result: any) {
                     alert("Menunggu pembayaran kamu selesai.");
                     console.log(result);
+                    window.location.href = "/dashboard/bookings";
                 },
                 onError: function (result: any) {
                     alert("Pembayaran gagal diproses.");
                     console.log(result);
+                    window.location.href = "/dashboard/bookings";
                 },
                 onClose: function () {
                     alert("Kamu menutup halaman kasir sebelum menyelesaikan pembayaran.");
+                    window.location.href = "/dashboard/bookings";
                 },
             });
 
@@ -101,6 +116,20 @@ export default function CheckoutPage({ params }: PageProps) {
         return (
             <div className="w-full min-h-screen flex items-center justify-center bg-slate-50">
                 <Loader2 className="w-6 h-6 text-indigo-600 animate-spin" />
+            </div>
+        );
+    }
+
+    if (!booking) {
+        return (
+            <div className="w-full min-h-screen flex flex-col items-center justify-center bg-[#f2f4f7] p-4">
+                <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm max-w-sm text-center">
+                    <p className="text-xs font-bold text-red-600">Gagal memuat detail pemesanan.</p>
+                    <p className="text-[10px] text-slate-500 mt-1">Data pemesanan tidak ditemukan atau terjadi kesalahan server.</p>
+                    <Link href="/dashboard/bookings" className="inline-block mt-4 bg-indigo-600 text-white text-[10px] font-bold py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors">
+                        Kembali ke Tiket Saya
+                    </Link>
+                </div>
             </div>
         );
     }

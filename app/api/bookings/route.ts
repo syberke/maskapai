@@ -64,7 +64,7 @@ export async function POST(request: Request) {
                         create: {
                             invoiceNumber: `RENGGO-BK-${randomString}-${invoiceRandom}`, // Format invoice untuk Midtrans order_id
                             amount: calculatedTotalPrice,
-                            paymentStatus: "PENDING", // Atur status awal payment ke PENDING
+                            paymentStatus: "UNPAID", // Atur status awal payment ke UNPAID (sesuai enum DB)
                         }
                     }
                 },
@@ -79,5 +79,43 @@ export async function POST(request: Request) {
             return NextResponse.json({ message: "Kursi baru saja dipesan orang lain!" }, { status: 409 });
         }
         return NextResponse.json({ message: "Gagal memproses booking.", detail: error.message }, { status: 500 });
+    }
+}
+
+export async function GET(request: Request) {
+    try {
+        const { searchParams } = new URL(request.url);
+        const id = searchParams.get("id");
+
+        if (!id) {
+            return NextResponse.json({ message: "ID Booking diperlukan." }, { status: 400 });
+        }
+
+        const booking = await prisma.booking.findUnique({
+            where: { id: Number(id) },
+            include: {
+                payment: true,
+                flight: {
+                    include: {
+                        departureAirport: true,
+                        arrivalAirport: true,
+                        plane: {
+                            include: {
+                                airline: true,
+                            },
+                        },
+                    },
+                },
+            },
+        });
+
+        if (!booking) {
+            return NextResponse.json({ message: "Booking tidak ditemukan." }, { status: 404 });
+        }
+
+        return NextResponse.json(booking, { status: 200 });
+    } catch (error: any) {
+        console.error("Fetch Booking Error:", error);
+        return NextResponse.json({ message: "Gagal mengambil data booking.", error: error.message }, { status: 500 });
     }
 }

@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2, KeyRound, ArrowRight } from "lucide-react";
 import Link from "next/link";
 
-export default function VerifyPage() {
+function VerifyPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   
@@ -163,5 +163,17 @@ export default function VerifyPage() {
 
       </div>
     </main>
+  );
+}
+
+export default function VerifyPage() {
+  return (
+    <Suspense fallback={
+      <main className="min-h-screen bg-[#F8FAFC] flex items-center justify-center">
+        <Loader2 className="w-6 h-6 text-indigo-600 animate-spin" />
+      </main>
+    }>
+      <VerifyPageContent />
+    </Suspense>
   );
 }
