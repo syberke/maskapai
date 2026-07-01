@@ -16,7 +16,7 @@ export async function POST() {
     });
 
     return response;
-  } catch (error) {
+  } catch {
     return NextResponse.json({ message: "Gagal memproses logout" }, { status: 500 });
   }
 }

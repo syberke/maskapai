@@ -2,8 +2,12 @@
 
 import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Loader2, KeyRound, ArrowRight } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import Link from "next/link";
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Kode OTP salah atau kedaluwarsa.";
+}
 
 function VerifyPageContent() {
   const router = useRouter();
@@ -21,7 +25,10 @@ function VerifyPageContent() {
 
   useEffect(() => {
     if (emailParam) {
-      setEmail(emailParam);
+      const syncEmail = window.setTimeout(() => {
+        setEmail(emailParam);
+      }, 0);
+      return () => window.clearTimeout(syncEmail);
     }
   }, [emailParam]);
 
@@ -79,8 +86,8 @@ function VerifyPageContent() {
         router.push("/auth/login");
       }, 1500);
 
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(getErrorMessage(err));
       setOtp(["", "", "", "", "", ""]); // Reset kotak jika gagal
       inputRefs.current[0]?.focus();
     } finally {

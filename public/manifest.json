@@ -1,0 +1,22 @@
+{
+  "name": "RENGGO Flight Booking System",
+  "short_name": "RENGGO App",
+  "description": "Sistem Informasi Manajemen Maskapai Penerbangan Online RENGGO",
+  "start_url": "/dashboard/bookings",
+  "display": "standalone",
+  "background_color": "#F8FAFC",
+  "theme_color": "#4f46e5",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/784/784791.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/784/784791.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

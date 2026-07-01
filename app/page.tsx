@@ -1,9 +1,8 @@
 import { Suspense } from "react";
-import Navbar from "./components/Navbar";
-import HeroSection from "./components/HeroSection";
-import SearchForm from "./components/SearchForm";
-import Information from "./components/Information";
-import Footer from "./components/Footer";
+import HeroSection from "../components/HeroSection";
+import SearchForm from "../components/SearchForm";
+import Information from "../components/Information";
+import Footer from "../components/Footer";
 import prisma from "@/lib/prisma"; 
 
 // Fungsi untuk fetching data bandara langsung dari database aktif

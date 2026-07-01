@@ -3,8 +3,12 @@
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import ReCAPTCHA from "react-google-recaptcha";
-import { Lock, Mail, Loader2, Eye, EyeOff, ArrowRight } from "lucide-react";
+import { Lock, Mail, Loader2, Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Gagal masuk.";
+}
 
 export default function LoginPage() {
   const router = useRouter();
@@ -47,8 +51,8 @@ export default function LoginPage() {
 
       router.push("/");
       router.refresh();
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(getErrorMessage(err));
       captchaRef.current?.reset(); 
     } finally {
       setLoading(false);

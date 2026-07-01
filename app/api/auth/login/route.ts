@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import { getJwtSecret } from "@/lib/auth";
 
 const prisma = new PrismaClient();
 
@@ -42,7 +43,7 @@ export async function POST(request: Request) {
     // 5. Build secure token JWT
     const token = jwt.sign(
       { userId: user.id, email: user.email, role: user.role },
-      process.env.JWT_SECRET || "SUPER_SECRET_RENGGO",
+      getJwtSecret(),
       { expiresIn: "24h" }
     );
 

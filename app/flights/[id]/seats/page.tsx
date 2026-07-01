@@ -1,9 +1,9 @@
 // app/flights/[id]/seats/page.tsx
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, SeatClass } from "@prisma/client";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Plane } from "lucide-react";
 import Link from "next/link";
-import SeatMapWrapper from "../../../components/SeatMapWrapper";
+import SeatMapWrapper from "../../../../components/SeatMapWrapper";
 
 const prisma = new PrismaClient();
 
@@ -17,7 +17,10 @@ export default async function FlightSeatsPage({ params, searchParams }: PageProp
     const resolvedSearchParams = await searchParams;
 
     const flightId = Number(resolvedParams.id);
-    const seatClass = resolvedSearchParams.class || "ECONOMY";
+    const requestedSeatClass = resolvedSearchParams.class || SeatClass.ECONOMY;
+    const seatClass = Object.values(SeatClass).includes(requestedSeatClass as SeatClass)
+        ? (requestedSeatClass as SeatClass)
+        : SeatClass.ECONOMY;
     const passengers = Number(resolvedSearchParams.passengers) || 1;
 
     // Ambil data murni dari server database
@@ -28,7 +31,7 @@ export default async function FlightSeatsPage({ params, searchParams }: PageProp
             arrivalAirport: true,
             plane: { include: { airline: true } },
             flightSeats: {
-                where: { seatClass: seatClass as any },
+                where: { seatClass },
                 orderBy: { seatNumber: "asc" },
             },
         },
@@ -44,7 +47,7 @@ export default async function FlightSeatsPage({ params, searchParams }: PageProp
     const cleanSeats = flight.flightSeats.map(s => ({
         id: s.id,
         seatNumber: s.seatNumber,
-        seatClass: s.seatClass as any,
+        seatClass: s.seatClass,
         isAvailable: s.isAvailable
     }));
 

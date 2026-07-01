@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import Navbar from "./components/Navbar"; //  1. Import komponen Navbar yang sudah dibuat
+import Navbar from "../components/Navbar"; //  1. Import komponen Navbar yang sudah dibuat
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -16,6 +16,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Mitra Perjalanan Udara RENGGO",
   description: "Mitra perjalanan udara terpercaya yang menghubungkan Anda dengan berbagai maskapai dan destinasi melalui layanan pemesanan yang cepat, aman, dan profesional.",
+  manifest: "/manifest.json", 
 };
 
 export default function RootLayout({
@@ -36,6 +37,7 @@ export default function RootLayout({
         <main className="flex-1 flex flex-col">
           {children}
         </main>
+        
       </body>
     </html>
   );

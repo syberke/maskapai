@@ -1,10 +1,19 @@
 // app/flights/page.tsx
-import { PrismaClient } from "@prisma/client";
-import FlightCard from "../components/FlightCard";
-import SearchForm from "../components/SearchForm";
-import { AlertCircle, Search, SlidersHorizontal, ArrowRight } from "lucide-react";
+import { Prisma, PrismaClient, SeatClass } from "@prisma/client";
+import FlightCard from "../../components/FlightCard";
+import SearchForm from "../../components/SearchForm";
+import { AlertCircle, Search, ArrowRight } from "lucide-react";
 
 const prisma = new PrismaClient();
+
+type FlightWithSearchRelations = Prisma.FlightGetPayload<{
+    include: {
+        departureAirport: true;
+        arrivalAirport: true;
+        plane: { include: { airline: true } };
+        flightSeats: true;
+    };
+}>;
 
 async function getAirports() {
     return await prisma.airport.findMany({
@@ -23,7 +32,10 @@ export default async function FlightsPage({
     const from = (resolvedSearchParams.from as string) || "";
     const to = (resolvedSearchParams.to as string) || "";
     const date = (resolvedSearchParams.date as string) || "";
-    const seatClass = (resolvedSearchParams.class as string) || "ECONOMY";
+    const requestedSeatClass = (resolvedSearchParams.class as string) || SeatClass.ECONOMY;
+    const seatClass = Object.values(SeatClass).includes(requestedSeatClass as SeatClass)
+        ? (requestedSeatClass as SeatClass)
+        : SeatClass.ECONOMY;
     const passengers = Number(resolvedSearchParams.passengers) || 1;
 
     const airports = await getAirports();
@@ -31,7 +43,7 @@ export default async function FlightsPage({
     const isValidDate = date && !isNaN(new Date(date).getTime());
     const isSearchParamComplete = from && to && isValidDate;
 
-    let flights: any[] = [];
+    let flights: FlightWithSearchRelations[] = [];
 
     if (isSearchParamComplete) {
         flights = await prisma.flight.findMany({
@@ -48,7 +60,7 @@ export default async function FlightsPage({
                 arrivalAirport: true,
                 plane: { include: { airline: true } },
                 flightSeats: {
-                    where: { seatClass: seatClass as any, isAvailable: true },
+                    where: { seatClass, isAvailable: true },
                 },
             },
             orderBy: { departureTime: "asc" },
@@ -113,9 +125,15 @@ export default async function FlightsPage({
                                         key={flight.id}
                                         flight={{
                                             ...flight,
+                                            priceEconomy: Number(flight.priceEconomy),
+                                            priceBusiness: Number(flight.priceBusiness),
+                                            priceFirstClass: Number(flight.priceFirstClass),
                                             plane: {
                                                 model: flight.plane.name,
-                                                airline: flight.plane.airline
+                                                airline: {
+                                                    name: flight.plane.airline.name,
+                                                    logoUrl: flight.plane.airline.logoUrl ?? undefined,
+                                                },
                                             }
                                         }}
                                         seatClass={seatClass}

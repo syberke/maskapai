@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import jwt from "jsonwebtoken";
+import { getJwtSecret } from "@/lib/auth";
 
 export async function GET(request: Request) {
   try {
@@ -15,13 +16,18 @@ export async function GET(request: Request) {
     }
 
     // Dekode isi token JWT
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || "SUPER_SECRET_RENGGO_MASKAPAI_BAZMA") as any;
+    const decoded = jwt.verify(token, getJwtSecret()) as { userId: number; email: string; role: string };
 
     // Ambil data nama dari Prisma jika diperlukan, atau langsung return dari isi token agar cepat
     return NextResponse.json({
-      user: { name: decoded.email.split("@")[0], role: decoded.role }, // Ambil nama depan email sebagai nama panggung dummy
+      user: { 
+        id: decoded.userId,
+        name: decoded.email.split("@")[0], 
+        email: decoded.email,
+        role: decoded.role 
+      },
     });
-  } catch (error) {
+  } catch {
     return NextResponse.json({ message: "Token tidak valid" }, { status: 401 });
   }
 }

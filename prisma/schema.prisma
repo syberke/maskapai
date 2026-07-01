@@ -15,6 +15,7 @@ enum Role {
   USER
   ADMIN
   MANAGER
+  STAFF
 }
 
 enum SeatClass {
@@ -186,6 +187,7 @@ model BookingSeat {
   flightSeatId   Int
   passengerName  String     @db.VarChar(255) // Data Manifest Penumpang (Penting untuk E-Ticket)
   passengerNik   String     @db.VarChar(20)  // NIK untuk validasi manifes penerbangan resmi
+  passengerGender String?   @db.VarChar(20)
   createdAt      DateTime   @default(now())
 
   // Relasi Induk

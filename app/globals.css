@@ -24,3 +24,41 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+@media print {
+  @page {
+    margin: 14mm;
+    size: A4;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+  }
+
+  nav,
+  aside,
+  footer,
+  [data-print-hidden="true"] {
+    display: none !important;
+  }
+
+  main {
+    display: block !important;
+    padding: 0 !important;
+  }
+
+  .print-report {
+    padding: 0 !important;
+  }
+
+  .print-report section,
+  .print-report table {
+    box-shadow: none !important;
+  }
+
+  .print-break-inside-avoid {
+    break-inside: avoid;
+  }
+}

@@ -116,10 +116,11 @@ export default function Information() {
             >
               {/* Wadah Logo Maskapai */}
               <div className="relative w-12 h-12 flex-shrink-0 flex items-center justify-center bg-slate-50 rounded-xl p-1 border border-slate-100/60 group-hover:bg-white transition-colors">
-                {/* Gunakan tag <img> biasa jika belum setup konfigurasi domain di next.config.js */}
-                <img 
-                  src={airline.logo} 
+                <Image
+                  src={airline.logo}
                   alt={airline.name}
+                  fill
+                  sizes="48px"
                   className="max-w-full max-h-full object-contain grayscale opacity-80 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-300"
                 />
               </div>

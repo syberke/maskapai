@@ -3,18 +3,15 @@
 import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { Menu, X, LogOut, Ticket, Plane, ChevronDown } from "lucide-react";
+import { Menu, X, LogOut, Ticket, Plane, ChevronDown, ShieldAlert, BarChart2, ClipboardCheck } from "lucide-react";
 
 export default function Navbar() {
   const router = useRouter();
   const pathname = usePathname();
-
-  if (pathname.startsWith("/auth")) {
-    return null;
-  }
+  const shouldHideNavbar = pathname.startsWith("/auth") || pathname.startsWith("/admin") || pathname.startsWith("/manager") || pathname.startsWith("/staff");
 
   // 1. STATE AUTHENTICATION (Kini otomatis sinkron dengan API Backend)
-  const [user, setUser] = useState<{ name: string; email: string } | null>(null);
+  const [user, setUser] = useState<{ name: string; email: string; role: string } | null>(null);
 
   const [isOpen, setIsOpen] = useState(false); // Mobile menu state
   const [isScrolled, setIsScrolled] = useState(false); // Scroll effect state
@@ -42,8 +39,13 @@ export default function Navbar() {
   };
 
   useEffect(() => {
-    // Jalankan pengecekan di awal saat komponen dimuat
-    checkUserSession();
+    if (shouldHideNavbar) {
+      return;
+    }
+
+    const initialCheck = window.setTimeout(() => {
+      checkUserSession();
+    }, 0);
 
     // Sinkronisasi instan jika user login/logout di tab browser lain
     window.addEventListener("storage", checkUserSession);
@@ -52,10 +54,11 @@ export default function Navbar() {
     const interval = setInterval(checkUserSession, 2000);
 
     return () => {
+      window.clearTimeout(initialCheck);
       window.removeEventListener("storage", checkUserSession);
       clearInterval(interval);
     };
-  }, []);
+  }, [shouldHideNavbar]);
 
   // Efek merubah background navbar saat scroll melewati batas banner
   useEffect(() => {
@@ -96,6 +99,10 @@ export default function Navbar() {
       console.error("Gagal memproses logout:", err);
     }
   };
+
+  if (shouldHideNavbar) {
+    return null;
+  }
 
   return (
     <nav
@@ -154,6 +161,33 @@ export default function Navbar() {
                       <p className="text-[10px] font-black tracking-wider text-slate-950 truncate uppercase">{user.name}</p>
                       <p className="text-[9px] text-slate-400 truncate mt-0.5">{user.email}</p>
                     </div>
+                    {user.role === "ADMIN" && (
+                      <Link
+                        href="/admin"
+                        onClick={() => setIsDropdownOpen(false)}
+                        className="w-full text-left px-4 py-2 text-[10px] font-black tracking-wider text-indigo-600 hover:bg-indigo-50/50 flex items-center gap-2.5 uppercase transition-colors"
+                      >
+                        <ShieldAlert className="h-3.5 w-3.5 text-indigo-500" /> PANEL ADMIN
+                      </Link>
+                    )}
+                    {user.role === "MANAGER" && (
+                      <Link
+                        href="/manager"
+                        onClick={() => setIsDropdownOpen(false)}
+                        className="w-full text-left px-4 py-2 text-[10px] font-black tracking-wider text-emerald-600 hover:bg-emerald-50/50 flex items-center gap-2.5 uppercase transition-colors"
+                      >
+                        <BarChart2 className="h-3.5 w-3.5 text-emerald-500" /> PANEL MANAGER
+                      </Link>
+                    )}
+                    {user.role === "STAFF" && (
+                      <Link
+                        href="/staff"
+                        onClick={() => setIsDropdownOpen(false)}
+                        className="w-full text-left px-4 py-2 text-[10px] font-black tracking-wider text-sky-600 hover:bg-sky-50/50 flex items-center gap-2.5 uppercase transition-colors"
+                      >
+                        <ClipboardCheck className="h-3.5 w-3.5 text-sky-500" /> PANEL STAFF
+                      </Link>
+                    )}
                     <Link
                       href="/dashboard/bookings"
                       onClick={() => setIsDropdownOpen(false)}
@@ -214,6 +248,21 @@ export default function Navbar() {
                 <p className="text-[10px] font-black tracking-wider text-slate-950 uppercase">{user.name}</p>
                 <p className="text-[9px] text-slate-400 truncate">{user.email}</p>
               </div>
+              {user.role === "ADMIN" && (
+                <Link href="/admin" className="text-[10px] font-black tracking-[0.2em] text-indigo-600 uppercase flex items-center gap-2" onClick={() => setIsOpen(false)}>
+                  <ShieldAlert className="h-3.5 w-3.5" /> PANEL ADMIN
+                </Link>
+              )}
+              {user.role === "MANAGER" && (
+                <Link href="/manager" className="text-[10px] font-black tracking-[0.2em] text-emerald-600 uppercase flex items-center gap-2" onClick={() => setIsOpen(false)}>
+                  <BarChart2 className="h-3.5 w-3.5" /> PANEL MANAGER
+                </Link>
+              )}
+              {user.role === "STAFF" && (
+                <Link href="/staff" className="text-[10px] font-black tracking-[0.2em] text-sky-600 uppercase flex items-center gap-2" onClick={() => setIsOpen(false)}>
+                  <ClipboardCheck className="h-3.5 w-3.5" /> PANEL STAFF
+                </Link>
+              )}
               <Link href="/dashboard/bookings" className="text-[10px] font-bold tracking-[0.2em] text-slate-600 uppercase flex items-center gap-2" onClick={() => setIsOpen(false)}>
                 <Ticket className="h-3.5 w-3.5" /> TIKET SAYA
               </Link>

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, SeatClass } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
@@ -10,7 +10,10 @@ export async function GET(request: Request) {
     const from = searchParams.get("from") || ""; // Kode Bandara Asal (e.g., CGK)
     const to = searchParams.get("to") || "";     // Kode Bandara Tujuan (e.g., DPS)
     const date = searchParams.get("date") || "";   // Format: YYYY-MM-DD
-    const seatClass = searchParams.get("class") || "ECONOMY";
+    const requestedSeatClass = searchParams.get("class") || SeatClass.ECONOMY;
+    const seatClass = Object.values(SeatClass).includes(requestedSeatClass as SeatClass)
+      ? (requestedSeatClass as SeatClass)
+      : SeatClass.ECONOMY;
 
     // Validasi basic
     if (!from || !to || !date) {
@@ -48,7 +51,7 @@ export async function GET(request: Request) {
         // Hitung sisa kursi yang masih tersedia untuk kelas yang dipilih
         flightSeats: {
           where: {
-            seatClass: seatClass as any,
+            seatClass,
             isAvailable: true,
           },
           select: {

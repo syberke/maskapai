@@ -1,17 +1,31 @@
 // app/dashboard/bookings/page.tsx
 import { PrismaClient } from "@prisma/client";
+import { getSessionFromCookie } from "@/lib/auth";
+import { redirect } from "next/navigation";
 import {
     Plane,
     CircleCheck,
     Timer
 } from "lucide-react";
-import BookingAction from "./BookingAction"; // 🎯 Import Client Component baru kita
+import BookingAction from "./BookingAction"; // 🎯 Import Client Component
+import OfflineTicketsButton from "./OfflineTicketsButton";
 
 const prisma = new PrismaClient();
 
-export default async function MyBookingsPage() {
+interface PageProps {
+    searchParams: Promise<{ payment?: string }>;
+}
+
+export default async function MyBookingsPage({ searchParams }: PageProps) {
+    const resolvedSearchParams = await searchParams;
+    const session = await getSessionFromCookie();
+
+    if (!session) {
+        redirect("/auth/login");
+    }
+
     const myBookings = await prisma.booking.findMany({
-        where: { userId: 3 },
+        where: { userId: session.userId },
         include: {
             flight: {
                 include: {
@@ -29,9 +43,58 @@ export default async function MyBookingsPage() {
                     flightSeat: true,
                 },
             },
+            payment: true,
         },
         orderBy: { createdAt: "desc" },
     });
+
+    const serializedBookings = myBookings.map((b) => ({
+        id: b.id,
+        bookingCode: b.bookingCode,
+        totalPrice: Number(b.totalPrice),
+        status: b.status,
+        createdAt: b.createdAt.toISOString(),
+        flight: {
+            flightNumber: b.flight.flightNumber,
+            departureTime: b.flight.departureTime.toISOString(),
+            arrivalTime: b.flight.arrivalTime.toISOString(),
+            departureAirport: {
+                code: b.flight.departureAirport.code,
+                name: b.flight.departureAirport.name,
+                city: b.flight.departureAirport.city,
+                country: b.flight.departureAirport.country,
+            },
+            arrivalAirport: {
+                code: b.flight.arrivalAirport.code,
+                name: b.flight.arrivalAirport.name,
+                city: b.flight.arrivalAirport.city,
+                country: b.flight.arrivalAirport.country,
+            },
+            plane: {
+                name: b.flight.plane.name,
+                code: b.flight.plane.code,
+                airline: {
+                    name: b.flight.plane.airline.name,
+                    code: b.flight.plane.airline.code,
+                },
+            },
+        },
+        bookingSeats: b.bookingSeats.map((bs) => ({
+            id: bs.id,
+            passengerName: bs.passengerName,
+            passengerNik: bs.passengerNik,
+            passengerGender: bs.passengerGender,
+            flightSeat: {
+                seatNumber: bs.flightSeat.seatNumber,
+                seatClass: bs.flightSeat.seatClass,
+            },
+        })),
+        payment: b.payment
+            ? {
+                paymentStatus: b.payment.paymentStatus,
+              }
+            : null,
+    }));
 
     return (
         <div className="min-h-screen bg-[#F8FAFC] pb-24 pt-28">
@@ -42,6 +105,26 @@ export default async function MyBookingsPage() {
                     <h1 className="text-2xl font-black text-slate-900 tracking-tight">Tiket Saya</h1>
                     <p className="text-xs text-slate-500 font-medium mt-1">Kelola perjalanan dan unduh boarding pass kamu.</p>
                 </div>
+
+                <OfflineTicketsButton bookings={serializedBookings} />
+
+                {resolvedSearchParams.payment === "paid" && (
+                    <div className="mb-5 rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-xs font-bold text-emerald-800">
+                        Pembayaran berhasil diterima. Tiket kamu masih berstatus PENDING sampai staff operasional mengonfirmasi pesanan.
+                    </div>
+                )}
+
+                {resolvedSearchParams.payment === "pending" && (
+                    <div className="mb-5 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs font-bold text-amber-800">
+                        Pembayaran belum selesai. Kamu bisa lanjut bayar atau cek status dari tiket terkait.
+                    </div>
+                )}
+
+                {resolvedSearchParams.payment === "error" && (
+                    <div className="mb-5 rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 text-xs font-bold text-rose-700">
+                        Pembayaran gagal diproses. Silakan coba lagi dari tombol bayar.
+                    </div>
+                )}
 
                 {/* LIST TIKET */}
                 <div className="flex flex-col gap-4">
@@ -58,7 +141,8 @@ export default async function MyBookingsPage() {
                             const isConfirmed = booking.status === "CONFIRMED";
 
                             return (
-                                <div key={booking.id} className="relative group transition-all duration-300 active:scale-[0.99]">
+                                /* 🎯 AMAN: 'active:scale-[0.99]' sudah dibuang dari baris ini agar klik modal tidak nge-bug */
+                                <div key={booking.id} className="relative group transition-all duration-300">
 
                                     {/* TIKET HORIZONTAL */}
                                     <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm group-hover:shadow-md transition-shadow grid grid-cols-1 md:grid-cols-5 items-center">
@@ -74,13 +158,22 @@ export default async function MyBookingsPage() {
                                                 </span>
                                             </div>
                                             <div className={`w-fit flex items-center gap-1 px-2.5 py-0.5 rounded-full border ${isConfirmed
-                                                    ? 'bg-emerald-50 border-emerald-100 text-emerald-600'
-                                                    : booking.status === 'PENDING'
-                                                        ? 'bg-amber-50 border-amber-100 text-amber-600'
-                                                        : 'bg-rose-50 border-rose-100 text-rose-600'
+                                                ? 'bg-emerald-50 border-emerald-100 text-emerald-600'
+                                                : booking.status === 'PENDING'
+                                                    ? 'bg-amber-50 border-amber-100 text-amber-600'
+                                                    : 'bg-rose-50 border-rose-100 text-rose-600'
                                                 }`}>
                                                 {isConfirmed ? <CircleCheck className="w-2.5 h-2.5" /> : <Timer className="w-2.5 h-2.5" />}
                                                 <span className="text-[8px] font-black uppercase tracking-widest">{booking.status}</span>
+                                            </div>
+                                            <div className={`mt-1 w-fit px-2.5 py-0.5 rounded-full border text-[8px] font-black uppercase tracking-widest ${
+                                                booking.payment?.paymentStatus === "PAID"
+                                                    ? "bg-sky-50 border-sky-100 text-sky-600"
+                                                    : booking.payment?.paymentStatus === "UNPAID"
+                                                        ? "bg-slate-100 border-slate-200 text-slate-500"
+                                                        : "bg-rose-50 border-rose-100 text-rose-600"
+                                            }`}>
+                                                {booking.payment?.paymentStatus || "UNPAID"}
                                             </div>
                                         </div>
 
@@ -132,12 +225,34 @@ export default async function MyBookingsPage() {
                                                 </div>
                                             </div>
 
+                                            {/* ACCORDION DETAIL PENUMPANG */}
+                                            <details className="mt-1 group/details bg-slate-900 border border-slate-800 rounded-lg overflow-hidden transition-all duration-300">
+                                                <summary className="flex items-center justify-between gap-2 px-2.5 py-1.5 text-[8px] font-bold text-slate-400 uppercase tracking-wider cursor-pointer list-none select-none hover:text-white transition-colors">
+                                                    <span>Manifes Penumpang</span>
+                                                    <span className="text-[7px] font-bold bg-white/15 px-1.5 py-0.5 rounded">BUKA</span>
+                                                </summary>
+                                                <div className="px-2.5 pb-2 pt-1 border-t border-white/5 flex flex-col gap-1.5 bg-slate-950 max-h-[140px] overflow-y-auto">
+                                                    {booking.bookingSeats.map((bs) => (
+                                                        <div key={bs.id} className="flex justify-between items-center text-[9px] text-slate-300 border-b border-white/5 pb-1 last:border-0 last:pb-0">
+                                                            <div className="pr-1.5 text-left">
+                                                                <span className="block font-black uppercase text-white truncate max-w-[120px]">{bs.passengerName}</span>
+                                                                <span className="text-[7px] text-slate-500 font-medium leading-none">{bs.passengerNik} &bull; {bs.passengerGender === "MALE" ? "L" : "P"}</span>
+                                                            </div>
+                                                            <span className="rounded bg-white/10 px-1.5 py-0.5 text-[8px] font-black text-white shrink-0">
+                                                                {bs.flightSeat.seatNumber}
+                                                            </span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </details>
+
                                             {/* ACTION BUTTON AREA */}
                                             <div className="mt-1 border-t border-white/5 pt-2">
-                                                {/* 🎯 MEMANGGIL CLIENT COMPONENT UNTUK AKSI STATUS */}
-                                                <BookingAction 
-                                                    bookingId={booking.id} 
-                                                    initialStatus={booking.status} 
+                                                <BookingAction
+                                                    bookingId={booking.id}
+                                                    initialStatus={booking.status}
+                                                    initialPaymentStatus={booking.payment?.paymentStatus || "UNPAID"}
+                                                    bookingCode={booking.bookingCode}
                                                 />
                                             </div>
                                         </div>
@@ -155,7 +270,7 @@ export default async function MyBookingsPage() {
 
                 {/* FOOTER INFO */}
                 <p className="text-center text-[10px] text-slate-400 mt-12 font-medium">
-                    Menampilkan riwayat pemesanan 6 month terakhir.<br />
+                    Menampilkan riwayat pemesanan 6 bulan terakhir.<br />
                     Butuh bantuan? <span className="text-indigo-500 font-bold">Hubungi Customer Service RENGGO</span>
                 </p>
 

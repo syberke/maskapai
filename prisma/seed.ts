@@ -1,8 +1,39 @@
 import { PrismaClient, SeatClass } from "@prisma/client";
+import bcrypt from "bcrypt";
 
 const prisma = new PrismaClient();
 
 async function main() {
+  console.log("Menyiapkan akun default multi-role...");
+  const defaultPassword = await bcrypt.hash("user123", 10);
+  const adminPassword = await bcrypt.hash("admin123", 10);
+  const managerPassword = await bcrypt.hash("manager123", 10);
+  const staffPassword = await bcrypt.hash("staff123", 10);
+
+  await prisma.user.upsert({
+    where: { email: "user@gmail.com" },
+    update: { name: "User Demo", password: defaultPassword, role: "USER", isVerified: true },
+    create: { name: "User Demo", email: "user@gmail.com", password: defaultPassword, role: "USER", isVerified: true },
+  });
+
+  await prisma.user.upsert({
+    where: { email: "admin@gmail.com" },
+    update: { name: "Admin Renggo", password: adminPassword, role: "ADMIN", isVerified: true },
+    create: { name: "Admin Renggo", email: "admin@gmail.com", password: adminPassword, role: "ADMIN", isVerified: true },
+  });
+
+  await prisma.user.upsert({
+    where: { email: "manager@gmail.com" },
+    update: { name: "Manager Renggo", password: managerPassword, role: "MANAGER", isVerified: true },
+    create: { name: "Manager Renggo", email: "manager@gmail.com", password: managerPassword, role: "MANAGER", isVerified: true },
+  });
+
+  await prisma.user.upsert({
+    where: { email: "staff@gmail.com" },
+    update: { name: "Staff Operasional", password: staffPassword, role: "STAFF", isVerified: true },
+    create: { name: "Staff Operasional", email: "staff@gmail.com", password: staffPassword, role: "STAFF", isVerified: true },
+  });
+
   console.log("🧼 Menghapus data lama secara berurutan...");
   await prisma.flightSeat.deleteMany({});
   await prisma.flight.deleteMany({});
@@ -17,10 +48,10 @@ async function main() {
   const dps = await prisma.airport.create({
     data: { code: "DPS", name: "Ngurah Rai International Airport", city: "Bali", country: "Indonesia" },
   });
-  const sub = await prisma.airport.create({
+  await prisma.airport.create({
     data: { code: "SUB", name: "Juanda International Airport", city: "Surabaya", country: "Indonesia" },
   });
-  const kno = await prisma.airport.create({
+  await prisma.airport.create({
     data: { code: "KNO", name: "Kualanamu International Airport", city: "Medan", country: "Indonesia" },
   });
 
@@ -34,8 +65,15 @@ async function main() {
     data: { name: "Boeing 737-800 NextGen", code: "PK-RGA", airlineId: renggoAir.id },
   });
 
-  console.log("📅 Menyiapkan tanggal penerbangan...");
-  const targetDates = ["2026-06-29", "2026-06-30", "2026-07-01"];
+  console.log("📅 Menyiapkan tanggal penerbangan otomatis (29 Juni - 10 Juli)...");
+  // 🎯 PERUBAHAN DI SINI: Generate tanggal otomatis dari 2026-06-29 sampai 2026-07-10
+  const targetDates: string[] = [];
+  const startDate = new Date("2026-06-29");
+  const endDate = new Date("2026-07-10");
+
+  for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+    targetDates.push(d.toISOString().split("T")[0]);
+  }
 
   console.log("🚀 Menghasilkan jadwal penerbangan & kursi otomatis...");
 
@@ -64,7 +102,6 @@ async function main() {
         arrivalAirportId: dps.id,
         departureTime: new Date(`${dateStr}T15:00:00.000Z`),
         arrivalTime: new Date(`${dateStr}T17:45:00.000Z`),
-        // 🎯 FIX: Ditambahkan harga yang kurang di sini agar tidak error
         priceEconomy: 1350000,
         priceBusiness: 2700000,
         priceFirstClass: 5400000,

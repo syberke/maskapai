@@ -3,8 +3,12 @@
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import ReCAPTCHA from "react-google-recaptcha";
-import { Lock, Mail, User, Loader2, Eye, EyeOff, ArrowRight } from "lucide-react";
+import { Lock, Mail, User, Loader2, Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Gagal melakukan registrasi.";
+}
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -53,8 +57,8 @@ export default function RegisterPage() {
         router.push(`/auth/verify?email=${encodeURIComponent(email)}`);
       }, 1500);
 
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(getErrorMessage(err));
       captchaRef.current?.reset(); // Reset captcha jika registrasi gagal
     } finally {
       setLoading(false);

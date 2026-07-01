@@ -10,7 +10,10 @@ export async function middleware(request: NextRequest) {
   const isProtectedRoute = 
     pathname.startsWith("/booking") || 
     pathname.startsWith("/dashboard") || 
-    pathname.startsWith("/checkout");
+    pathname.startsWith("/checkout") ||
+    pathname.startsWith("/admin") ||
+    pathname.startsWith("/manager") ||
+    pathname.startsWith("/staff");
 
   // 2. Tentukan rute autentikasi (kalau sudah login, tidak boleh ke sini lagi)
   const isAuthRoute = 
@@ -23,18 +26,38 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/auth/login", request.url));
   }
 
-  // JIKA SUDAH LOGIN dan mencoba masuk ke halaman login/register lagi
-  if (token && isAuthRoute) {
+  // JIKA SUDAH LOGIN
+  if (token) {
     try {
       // Validasi apakah tokennya valid atau palsu
       const secret = new TextEncoder().encode(process.env.JWT_SECRET || "SUPER_SECRET_RENGGO_MASKAPAI_BAZMA");
-      await jwtVerify(token, secret);
-      
-      // Jika valid, tendang ke halaman utama (/) karena sudah login
-      return NextResponse.redirect(new URL("/", request.url));
-    } catch (err) {
-      // Jika token kedaluwarsa/palsu, hapus cookie tokennya dan biarkan akses halaman auth
-      const response = NextResponse.next();
+      const { payload } = await jwtVerify(token, secret);
+      const role = payload.role as string | undefined;
+
+      // Proteksi khusus Admin: Hanya role ADMIN yang boleh masuk /admin
+      if (pathname.startsWith("/admin") && role !== "ADMIN") {
+        return NextResponse.redirect(new URL("/", request.url));
+      }
+
+      // Proteksi khusus Manager: Hanya role MANAGER yang boleh masuk /manager
+      if (pathname.startsWith("/manager") && role !== "MANAGER") {
+        return NextResponse.redirect(new URL("/", request.url));
+      }
+
+      // Proteksi khusus Staff: Hanya role STAFF yang boleh masuk /staff
+      if (pathname.startsWith("/staff") && role !== "STAFF") {
+        return NextResponse.redirect(new URL("/", request.url));
+      }
+
+      // Jika mencoba masuk ke halaman login/register lagi
+      if (isAuthRoute) {
+        return NextResponse.redirect(new URL("/", request.url));
+      }
+    } catch {
+      // Jika token kedaluwarsa/palsu, hapus cookie tokennya
+      const response = isProtectedRoute 
+        ? NextResponse.redirect(new URL("/auth/login", request.url))
+        : NextResponse.next();
       response.cookies.delete("token");
       return response;
     }
@@ -45,5 +68,14 @@ export async function middleware(request: NextRequest) {
 
 // Konfigurasi rute mana saja yang akan dipantau oleh middleware
 export const config = {
-  matcher: ["/booking/:path*", "/dashboard/:path*", "/checkout/:path*", "/auth/:path*"],
+  matcher: [
+    "/booking/:path*",
+    "/bookings/:path*",
+    "/dashboard/:path*", 
+    "/checkout/:path*", 
+    "/auth/:path*",
+    "/admin/:path*",
+    "/manager/:path*",
+    "/staff/:path*"
+  ],
 };
