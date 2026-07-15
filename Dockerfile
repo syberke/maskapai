@@ -13,7 +13,10 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY package.json package-lock.json ./
-RUN npm ci
+
+# package-lock.json pada source lama sempat tidak sinkron dengan package.json.
+# npm install memperbarui resolusi dependency di image build dan menghindari npm ci gagal.
+RUN npm install --no-audit --no-fund
 
 # =====================================
 # DATABASE MIGRATION IMAGE
@@ -23,9 +26,9 @@ FROM deps AS migrate
 COPY prisma ./prisma
 COPY prisma.config.ts ./
 
-# Prisma Client generation only needs a syntactically valid URL here.
-# The real runtime DATABASE_URL is injected by Docker Compose.
-RUN DATABASE_URL="postgresql://postgres:postgres@postgres:5432/maskapai?schema=public" npx prisma generate
+# URL ini hanya untuk generate Prisma Client pada image build.
+# Runtime Compose menginjeksi DATABASE_URL yang menuju service `database`.
+RUN DATABASE_URL="postgresql://postgres:postgres@database:5432/maskapai?schema=public" npx prisma generate
 
 CMD ["npx", "prisma", "migrate", "deploy"]
 
@@ -42,9 +45,9 @@ ENV NEXT_PUBLIC_RECAPTCHA_SITE_KEY=${NEXT_PUBLIC_RECAPTCHA_SITE_KEY}
 ENV NEXT_PUBLIC_MIDTRANS_CLIENT_KEY=${NEXT_PUBLIC_MIDTRANS_CLIENT_KEY}
 ENV NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
 
-# Prevent Prisma generate / build-time imports from failing because .env
-# is intentionally excluded from the Docker build context.
-ENV DATABASE_URL="postgresql://postgres:postgres@postgres:5432/maskapai?schema=public"
+# Prisma Client tetap membutuhkan DATABASE_URL valid ketika generate.
+# Halaman berbasis database dirender saat request, bukan saat Docker build.
+ENV DATABASE_URL="postgresql://postgres:postgres@database:5432/maskapai?schema=public"
 
 COPY . .
 

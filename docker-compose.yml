@@ -9,7 +9,7 @@ x-web-build: &web-build
     NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:?NEXT_PUBLIC_APP_URL is required}
 
 x-web-environment: &web-environment
-  DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-maskapai}?schema=public
+  DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@database:5432/${POSTGRES_DB:-maskapai}?schema=public
   NODE_ENV: production
   HOSTNAME: 0.0.0.0
   PORT: "3000"
@@ -28,33 +28,35 @@ x-web-common: &web-common
       - CMD
       - node
       - -e
-      - "fetch('http://127.0.0.1:3000').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+      - "fetch('http://127.0.0.1:3000/api/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
     interval: 10s
     timeout: 5s
     retries: 10
-    start_period: 20s
+    start_period: 30s
   networks:
-    - flight-network
+    - maskapai_internal
 
 services:
-  postgres:
+  database:
     image: postgres:16-alpine
-    container_name: maskapai-db
+    container_name: maskapai-database
     restart: unless-stopped
+    shm_size: 128mb
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-maskapai}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - maskapai_postgres:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
-      retries: 10
+      retries: 20
       start_period: 10s
+    stop_grace_period: 30s
     networks:
-      - flight-network
+      - maskapai_internal
 
   migrate:
     build:
@@ -66,40 +68,40 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-maskapai}?schema=public
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@database:5432/${POSTGRES_DB:-maskapai}?schema=public
     depends_on:
-      postgres:
+      database:
         condition: service_healthy
     networks:
-      - flight-network
+      - maskapai_internal
 
   web1:
     <<: *web-common
     container_name: maskapai-web1
     environment:
       <<: *web-environment
-      NEXT_PUBLIC_SERVER_ID: "1"
+      APP_NODE_NAME: web1
 
   web2:
     <<: *web-common
     container_name: maskapai-web2
     environment:
       <<: *web-environment
-      NEXT_PUBLIC_SERVER_ID: "2"
+      APP_NODE_NAME: web2
 
   web3:
     <<: *web-common
     container_name: maskapai-web3
     environment:
       <<: *web-environment
-      NEXT_PUBLIC_SERVER_ID: "3"
+      APP_NODE_NAME: web3
 
-  nginx:
-    image: nginx:alpine
-    container_name: maskapai-lb
+  loadbalancer:
+    image: nginx:1.27-alpine
+    container_name: maskapai-loadbalancer
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "8080:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
@@ -109,14 +111,20 @@ services:
         condition: service_healthy
       web3:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/lb-health >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
     networks:
-      - flight-network
+      - maskapai_internal
 
 networks:
-  flight-network:
+  maskapai_internal:
     driver: bridge
-    name: maskapai-network
+    name: maskapai_internal
 
 volumes:
-  postgres_data:
-    name: maskapai-postgres-data
+  maskapai_postgres:
+    name: maskapai_postgres
