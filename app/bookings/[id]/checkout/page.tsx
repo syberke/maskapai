@@ -211,19 +211,8 @@ export default function CheckoutPage({ params }: PageProps) {
             }
 
             window.snap.pay(data.token, {
-                onSuccess: async function (result: MidtransResult) {
+				onSuccess: async function (result: MidtransResult) {
                     console.log(result);
-
-                    try {
-                        await fetch("/api/bookings/check-status", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ bookingId }),
-                        });
-                    } catch (err) {
-                        console.error("Gagal auto-update status pembayaran:", err);
-                    }
-
                     window.location.href = "/dashboard/bookings?payment=paid";
                 },
                 onPending: function (result: MidtransResult) {

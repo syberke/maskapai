@@ -65,11 +65,11 @@ async function main() {
     data: { name: "Boeing 737-800 NextGen", code: "PK-RGA", airlineId: renggoAir.id },
   });
 
-  console.log("📅 Menyiapkan tanggal penerbangan otomatis (29 Juni - 10 Juli)...");
-  // 🎯 PERUBAHAN DI SINI: Generate tanggal otomatis dari 2026-06-29 sampai 2026-07-10
+  console.log("📅 Menyiapkan tanggal penerbangan otomatis (15 Juli - 20 Juli)...");
+  // 🎯 PERUBAHAN DI SINI: Generate tanggal otomatis dari 2026-07-15 sampai 2026-07-20
   const targetDates: string[] = [];
-  const startDate = new Date("2026-06-29");
-  const endDate = new Date("2026-07-10");
+  const startDate = new Date("2026-07-15");
+  const endDate = new Date("2026-07-20");
 
   for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
     targetDates.push(d.toISOString().split("T")[0]);

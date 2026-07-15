@@ -4,7 +4,7 @@ import { BookingStatus, PaymentStatus, Role } from "@prisma/client";
 import { redirect } from "next/navigation";
 import { CalendarDays, CheckCircle2, ClipboardList, Plane, Search, XCircle } from "lucide-react";
 import Link from "next/link";
-import { cancelBookingAction, confirmBookingAction } from "./actions";
+import { cancelBookingAction, confirmBookingAction, confirmBoardingAction } from "./actions";
 
 interface PageProps {
   searchParams: Promise<{ flightId?: string; q?: string }>;
@@ -26,12 +26,12 @@ function statusBadge(status: string, variant: "booking" | "payment") {
   const isPending = status === BookingStatus.PENDING || status === PaymentStatus.UNPAID;
 
   return `inline-flex rounded-full border px-2 py-0.5 text-[8px] font-black uppercase tracking-widest ${isGood
-      ? "border-emerald-100 bg-emerald-50 text-emerald-700"
-      : isPending
-        ? variant === "payment"
-          ? "border-slate-200 bg-slate-50 text-slate-500"
-          : "border-amber-100 bg-amber-50 text-amber-700"
-        : "border-rose-100 bg-rose-50 text-rose-600"
+    ? "border-emerald-100 bg-emerald-50 text-emerald-700"
+    : isPending
+      ? variant === "payment"
+        ? "border-slate-200 bg-slate-50 text-slate-500"
+        : "border-amber-100 bg-amber-50 text-amber-700"
+      : "border-rose-100 bg-rose-50 text-rose-600"
     }`;
 }
 
@@ -137,6 +137,7 @@ export default async function StaffPage({ searchParams }: PageProps) {
         seatClass: seat.flightSeat?.seatClass || "ECONOMY",
         bookingStatus: booking.status,
         paymentStatus: booking.payment?.paymentStatus || PaymentStatus.UNPAID,
+        isBoarded: booking.isBoarded,
       }))
     )
     .filter((row) => {
@@ -280,21 +281,38 @@ export default async function StaffPage({ searchParams }: PageProps) {
             </div>
           </div>
 
-          <form className="flex w-full max-w-sm items-center gap-2" action="/staff">
-            {selectedFlightId && <input type="hidden" name="flightId" value={selectedFlightId} />}
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-              <input
-                name="q"
-                defaultValue={resolvedSearchParams.q || ""}
-                placeholder="Cari nama, PNR, NIK, kursi"
-                className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-[10px] font-bold text-slate-700 outline-none focus:border-sky-400 focus:bg-white"
-              />
-            </div>
-            <button className="rounded-lg bg-slate-950 px-3 py-2 text-[9px] font-black uppercase tracking-wider text-white">
-              Cari
-            </button>
-          </form>
+          <div className="flex flex-wrap gap-3">
+            <form className="flex w-full max-w-sm items-center gap-2" action="/staff">
+              {selectedFlightId && <input type="hidden" name="flightId" value={selectedFlightId} />}
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                <input
+                  name="q"
+                  defaultValue={resolvedSearchParams.q || ""}
+                  placeholder="Cari nama, PNR, NIK, kursi"
+                  className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-[10px] font-bold text-slate-700 outline-none focus:border-sky-400 focus:bg-white"
+                />
+              </div>
+              <button className="rounded-lg bg-slate-950 px-3 py-2 text-[9px] font-black uppercase tracking-wider text-white">
+                Cari
+              </button>
+            </form>
+
+            {/* FORM BOARDING - Staff input nomor booking */}
+            <form action={confirmBoardingAction} className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Plane className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-indigo-400" />
+                <input
+                  name="bookingCode"
+                  placeholder="Masukkan kode booking"
+                  className="w-52 rounded-lg border border-indigo-200 bg-indigo-50 py-2 pl-9 pr-3 text-[10px] font-bold text-slate-700 outline-none placeholder:text-indigo-300 focus:border-indigo-400 focus:bg-white"
+                />
+              </div>
+              <button className="rounded-lg bg-indigo-600 px-3 py-2 text-[9px] font-black uppercase tracking-wider text-white hover:bg-indigo-700">
+                Konfirmasi Boarding
+              </button>
+            </form>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
@@ -307,12 +325,13 @@ export default async function StaffPage({ searchParams }: PageProps) {
                 <th className="px-4 py-3">Gender</th>
                 <th className="px-4 py-3">Kursi</th>
                 <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">Boarding</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-[10px] font-medium text-slate-700">
               {manifestRows.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-10 text-center text-slate-400">Manifest kosong atau tidak cocok dengan pencarian.</td>
+                  <td colSpan={7} className="px-4 py-10 text-center text-slate-400">Manifest kosong atau tidak cocok dengan pencarian.</td>
                 </tr>
               ) : (
                 manifestRows.map((row) => (
@@ -333,6 +352,17 @@ export default async function StaffPage({ searchParams }: PageProps) {
                         <span className={statusBadge(row.bookingStatus, "booking")}>{row.bookingStatus}</span>
                         <span className={statusBadge(row.paymentStatus, "payment")}>{row.paymentStatus}</span>
                       </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      {row.isBoarded ? (
+                        <span className="inline-flex rounded-full border border-emerald-100 bg-emerald-50 px-2 py-0.5 text-[8px] font-black uppercase tracking-widest text-emerald-700">
+                          Sudah Boarding
+                        </span>
+                      ) : (
+                        <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[8px] font-black uppercase tracking-widest text-slate-500">
+                          Belum Boarding
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))

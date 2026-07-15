@@ -1,279 +1,271 @@
 // app/dashboard/bookings/page.tsx
-import { PrismaClient } from "@prisma/client";
+import prisma from "@/lib/prisma";
 import { getSessionFromCookie } from "@/lib/auth";
+import { BookingStatus, PaymentStatus } from "@prisma/client";
 import { redirect } from "next/navigation";
-import {
-    Plane,
-    CircleCheck,
-    Timer
-} from "lucide-react";
-import BookingAction from "./BookingAction"; // 🎯 Import Client Component
-import OfflineTicketsButton from "./OfflineTicketsButton";
-
-const prisma = new PrismaClient();
+import { Plane, TicketX, Clock, CheckCircle2, AlertCircle, XCircle } from "lucide-react";
+import Link from "next/link";
+import BookingAction from "./BookingAction";
 
 interface PageProps {
     searchParams: Promise<{ payment?: string }>;
 }
 
-export default async function MyBookingsPage({ searchParams }: PageProps) {
-    const resolvedSearchParams = await searchParams;
+function formatDate(date: Date | string) {
+    return new Date(date).toLocaleDateString("id-ID", {
+        weekday: "long",
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+    });
+}
+
+function formatTime(date: Date | string) {
+    return new Date(date).toLocaleTimeString("id-ID", {
+        hour: "2-digit",
+        minute: "2-digit",
+    });
+}
+
+type StatusCfg = {
+    label: string;
+    badgeClass: string;
+    icon: React.ReactNode;
+};
+
+function statusConfig(status: BookingStatus, paymentStatus: PaymentStatus): StatusCfg {
+    if (status === BookingStatus.CONFIRMED) {
+        return {
+            label: "Dikonfirmasi",
+            badgeClass: "bg-emerald-50 text-emerald-700 border border-emerald-200",
+            icon: <CheckCircle2 className="w-3 h-3" />,
+        };
+    }
+    if (status === BookingStatus.PENDING && paymentStatus === PaymentStatus.PAID) {
+        return {
+            label: "Menunggu Konfirmasi",
+            badgeClass: "bg-sky-50 text-sky-700 border border-sky-200",
+            icon: <Clock className="w-3 h-3" />,
+        };
+    }
+    if (status === BookingStatus.PENDING) {
+        return {
+            label: "Belum Dibayar",
+            badgeClass: "bg-amber-50 text-amber-700 border border-amber-200",
+            icon: <AlertCircle className="w-3 h-3" />,
+        };
+    }
+    if (status === BookingStatus.CANCELLED) {
+        return {
+            label: "Dibatalkan",
+            badgeClass: "bg-rose-50 text-rose-700 border border-rose-200",
+            icon: <XCircle className="w-3 h-3" />,
+        };
+    }
+    return {
+        label: "Kedaluwarsa",
+        badgeClass: "bg-slate-100 text-slate-500 border border-slate-200",
+        icon: <XCircle className="w-3 h-3" />,
+    };
+}
+
+export default async function BookingsDashboardPage({ searchParams }: PageProps) {
     const session = await getSessionFromCookie();
 
     if (!session) {
         redirect("/auth/login");
     }
 
-    const myBookings = await prisma.booking.findMany({
+    const resolvedSearchParams = await searchParams;
+    const paymentNotif = resolvedSearchParams?.payment;
+
+    const bookings = await prisma.booking.findMany({
         where: { userId: session.userId },
         include: {
+            payment: true,
             flight: {
                 include: {
                     departureAirport: true,
                     arrivalAirport: true,
                     plane: {
-                        include: {
-                            airline: true,
-                        },
+                        include: { airline: true },
                     },
                 },
             },
             bookingSeats: {
-                include: {
-                    flightSeat: true,
-                },
+                include: { flightSeat: true },
             },
-            payment: true,
         },
         orderBy: { createdAt: "desc" },
     });
 
-    const serializedBookings = myBookings.map((b) => ({
-        id: b.id,
-        bookingCode: b.bookingCode,
-        totalPrice: Number(b.totalPrice),
-        status: b.status,
-        createdAt: b.createdAt.toISOString(),
-        flight: {
-            flightNumber: b.flight.flightNumber,
-            departureTime: b.flight.departureTime.toISOString(),
-            arrivalTime: b.flight.arrivalTime.toISOString(),
-            departureAirport: {
-                code: b.flight.departureAirport.code,
-                name: b.flight.departureAirport.name,
-                city: b.flight.departureAirport.city,
-                country: b.flight.departureAirport.country,
-            },
-            arrivalAirport: {
-                code: b.flight.arrivalAirport.code,
-                name: b.flight.arrivalAirport.name,
-                city: b.flight.arrivalAirport.city,
-                country: b.flight.arrivalAirport.country,
-            },
-            plane: {
-                name: b.flight.plane.name,
-                code: b.flight.plane.code,
-                airline: {
-                    name: b.flight.plane.airline.name,
-                    code: b.flight.plane.airline.code,
-                },
-            },
-        },
-        bookingSeats: b.bookingSeats.map((bs) => ({
-            id: bs.id,
-            passengerName: bs.passengerName,
-            passengerNik: bs.passengerNik,
-            passengerGender: bs.passengerGender,
-            flightSeat: {
-                seatNumber: bs.flightSeat.seatNumber,
-                seatClass: bs.flightSeat.seatClass,
-            },
-        })),
-        payment: b.payment
-            ? {
-                paymentStatus: b.payment.paymentStatus,
-              }
-            : null,
-    }));
-
     return (
-        <div className="min-h-screen bg-[#F8FAFC] pb-24 pt-28">
-            <div className="max-w-5xl mx-auto px-6">
+        <div className="w-full min-h-screen bg-slate-50 pt-24 pb-16 antialiased">
+            <div className="max-w-3xl mx-auto px-4">
 
-                {/* HEADER SECTION */}
-                <div className="mb-8">
-                    <h1 className="text-2xl font-black text-slate-900 tracking-tight">Tiket Saya</h1>
-                    <p className="text-xs text-slate-500 font-medium mt-1">Kelola perjalanan dan unduh boarding pass kamu.</p>
-                </div>
-
-                <OfflineTicketsButton bookings={serializedBookings} />
-
-                {resolvedSearchParams.payment === "paid" && (
-                    <div className="mb-5 rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-xs font-bold text-emerald-800">
-                        Pembayaran berhasil diterima. Tiket kamu masih berstatus PENDING sampai staff operasional mengonfirmasi pesanan.
+                {/* Payment Notification Banner */}
+                {paymentNotif === "paid" && (
+                    <div className="mb-5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl px-4 py-3 text-sm font-semibold flex items-center gap-2.5">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                        Pembayaran berhasil! Booking Anda sedang menunggu konfirmasi staff.
+                    </div>
+                )}
+                {paymentNotif === "pending" && (
+                    <div className="mb-5 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm font-semibold flex items-center gap-2.5">
+                        <Clock className="w-4 h-4 text-amber-600 shrink-0" />
+                        Pembayaran Anda sedang diproses.
+                    </div>
+                )}
+                {paymentNotif === "error" && (
+                    <div className="mb-5 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl px-4 py-3 text-sm font-semibold flex items-center gap-2.5">
+                        <XCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                        Terjadi kesalahan saat pembayaran. Silakan coba lagi.
                     </div>
                 )}
 
-                {resolvedSearchParams.payment === "pending" && (
-                    <div className="mb-5 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs font-bold text-amber-800">
-                        Pembayaran belum selesai. Kamu bisa lanjut bayar atau cek status dari tiket terkait.
-                    </div>
-                )}
-
-                {resolvedSearchParams.payment === "error" && (
-                    <div className="mb-5 rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 text-xs font-bold text-rose-700">
-                        Pembayaran gagal diproses. Silakan coba lagi dari tombol bayar.
-                    </div>
-                )}
-
-                {/* LIST TIKET */}
-                <div className="flex flex-col gap-4">
-                    {myBookings.length === 0 ? (
-                        <div className="bg-white border-2 border-dashed border-slate-200 rounded-3xl p-16 flex flex-col items-center text-center">
-                            <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
-                                <Plane className="w-8 h-8 text-slate-300 -rotate-45" />
-                            </div>
-                            <h3 className="text-slate-900 font-bold">Belum Ada Perjalanan</h3>
-                            <p className="text-xs text-slate-400 mt-1">Kamu belum memiliki riwayat pemesanan tiket pesawat.</p>
+                {/* Empty State */}
+                {bookings.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-24 text-center gap-4 bg-white rounded-2xl border border-slate-200">
+                        <div className="w-14 h-14 rounded-full bg-slate-100 flex items-center justify-center">
+                            <TicketX className="w-6 h-6 text-slate-400" />
                         </div>
-                    ) : (
-                        myBookings.map((booking) => {
-                            const isConfirmed = booking.status === "CONFIRMED";
+                        <div>
+                            <p className="text-slate-700 font-black text-sm">Belum ada tiket</p>
+                            <p className="text-slate-400 text-xs mt-1 font-medium">Yuk pesan penerbangan pertama Anda!</p>
+                        </div>
+                        <Link
+                            href="/flights"
+                            className="mt-1 bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-black py-2 px-5 rounded-lg transition-colors uppercase tracking-wider"
+                        >
+                            Cari Penerbangan
+                        </Link>
+                    </div>
+                ) : (
+                    <div className="flex flex-col gap-3">
+                        {bookings.map((booking) => {
+                            const payStatus = booking.payment?.paymentStatus ?? PaymentStatus.UNPAID;
+                            const { label, badgeClass, icon } = statusConfig(booking.status, payStatus);
+                            const flight = booking.flight;
+                            const isExpiredOrCancelled = (booking.status === BookingStatus.CANCELLED || booking.status === BookingStatus.EXPIRED);
 
                             return (
-                                /* 🎯 AMAN: 'active:scale-[0.99]' sudah dibuang dari baris ini agar klik modal tidak nge-bug */
-                                <div key={booking.id} className="relative group transition-all duration-300">
+                                <div
+                                    key={booking.id}
+                                    className={`bg-white rounded-2xl border overflow-hidden transition-shadow hover:shadow-md ${isExpiredOrCancelled ? "border-slate-200 opacity-60" : "border-slate-200 shadow-sm"}`}
+                                >
+                                    {/* Top: Route bar */}
+                                    <div className="px-5 pt-4 pb-3 flex items-center gap-4">
+                                        {/* Airline icon */}
+                                        <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center shrink-0">
+                                            <Plane className="w-4 h-4 text-indigo-500" />
+                                        </div>
 
-                                    {/* TIKET HORIZONTAL */}
-                                    <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm group-hover:shadow-md transition-shadow grid grid-cols-1 md:grid-cols-5 items-center">
-
-                                        {/* KOLOM 1: MASKAPAI & STATUS */}
-                                        <div className="p-5 border-b md:border-b-0 md:border-r border-slate-100 flex flex-col justify-center h-full bg-slate-50/50 min-h-[110px]">
-                                            <div className="flex items-center gap-2 mb-2">
-                                                <div className="w-7 h-7 bg-white border border-slate-200 rounded-lg flex items-center justify-center p-1.5 shadow-sm">
-                                                    <Plane className="w-full h-full text-indigo-600" />
+                                        {/* Route */}
+                                        <div className="flex-1 flex items-center gap-3 min-w-0">
+                                            <div className="text-center shrink-0">
+                                                <span className="block text-xl font-black text-slate-900 tracking-tight leading-none">{flight.departureAirport.code}</span>
+                                                <span className="block text-[9px] text-slate-400 font-semibold uppercase mt-0.5">{flight.departureAirport.city}</span>
+                                            </div>
+                                            <div className="flex-1 flex flex-col items-center gap-0.5">
+                                                <span className="text-[9px] font-black text-indigo-600 font-mono tracking-widest uppercase bg-indigo-50 px-2 py-0.5 rounded-full">{flight.flightNumber}</span>
+                                                <div className="w-full flex items-center gap-1">
+                                                    <div className="flex-1 h-px bg-slate-200" />
+                                                    <div className="w-1.5 h-1.5 rounded-full bg-slate-300" />
+                                                    <div className="flex-1 h-px bg-slate-200" />
                                                 </div>
-                                                <span className="text-[11px] font-black text-slate-800 uppercase tracking-wider truncate">
-                                                    {booking.flight.plane.airline.name}
-                                                </span>
+                                                <span className="text-[8px] text-slate-400 font-semibold uppercase">{booking.bookingSeats[0]?.flightSeat?.seatClass}</span>
                                             </div>
-                                            <div className={`w-fit flex items-center gap-1 px-2.5 py-0.5 rounded-full border ${isConfirmed
-                                                ? 'bg-emerald-50 border-emerald-100 text-emerald-600'
-                                                : booking.status === 'PENDING'
-                                                    ? 'bg-amber-50 border-amber-100 text-amber-600'
-                                                    : 'bg-rose-50 border-rose-100 text-rose-600'
-                                                }`}>
-                                                {isConfirmed ? <CircleCheck className="w-2.5 h-2.5" /> : <Timer className="w-2.5 h-2.5" />}
-                                                <span className="text-[8px] font-black uppercase tracking-widest">{booking.status}</span>
-                                            </div>
-                                            <div className={`mt-1 w-fit px-2.5 py-0.5 rounded-full border text-[8px] font-black uppercase tracking-widest ${
-                                                booking.payment?.paymentStatus === "PAID"
-                                                    ? "bg-sky-50 border-sky-100 text-sky-600"
-                                                    : booking.payment?.paymentStatus === "UNPAID"
-                                                        ? "bg-slate-100 border-slate-200 text-slate-500"
-                                                        : "bg-rose-50 border-rose-100 text-rose-600"
-                                            }`}>
-                                                {booking.payment?.paymentStatus || "UNPAID"}
+                                            <div className="text-center shrink-0">
+                                                <span className="block text-xl font-black text-slate-900 tracking-tight leading-none">{flight.arrivalAirport.code}</span>
+                                                <span className="block text-[9px] text-slate-400 font-semibold uppercase mt-0.5">{flight.arrivalAirport.city}</span>
                                             </div>
                                         </div>
 
-                                        {/* KOLOM 2: DEPARTURE (ASAL) */}
-                                        <div className="p-5 flex flex-col justify-center text-center md:text-left h-full">
-                                            <span className="text-2xl font-black text-slate-950 tracking-tighter">{booking.flight.departureAirport.code}</span>
-                                            <span className="text-[10px] font-bold text-slate-400 uppercase truncate">{booking.flight.departureAirport.city}</span>
-                                            <span className="text-[10px] font-mono text-slate-600 mt-1 font-semibold">
-                                                {new Date(booking.flight.departureTime).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB
-                                            </span>
-                                        </div>
-
-                                        {/* KOLOM 3: ARROW TRACKER (TENGAH) */}
-                                        <div className="px-4 py-2 flex flex-col items-center justify-center h-full relative">
-                                            <div className="w-full border-t-2 border-dotted border-slate-200 absolute top-1/2 -translate-y-1/2 hidden md:block"></div>
-                                            <div className="bg-white p-1.5 z-10 border border-slate-100 rounded-full shadow-sm hidden md:block">
-                                                <Plane className="w-3.5 h-3.5 text-indigo-500 rotate-90" />
-                                            </div>
-                                            <span className="text-[9px] font-black text-slate-400 z-10 bg-slate-50 md:bg-white px-2 py-0.5 rounded border border-slate-100/80 md:mt-2">
-                                                {booking.flight.flightNumber}
-                                            </span>
-                                        </div>
-
-                                        {/* KOLOM 4: ARRIVAL (TUJUAN) */}
-                                        <div className="p-5 flex flex-col justify-center text-center md:text-right h-full">
-                                            <span className="text-2xl font-black text-slate-950 tracking-tighter">{booking.flight.arrivalAirport.code}</span>
-                                            <span className="text-[10px] font-bold text-slate-400 uppercase truncate">{booking.flight.arrivalAirport.city}</span>
-                                            <span className="text-[10px] font-mono text-slate-400 mt-1 font-medium">
-                                                {new Date(booking.flight.departureTime).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })}
-                                            </span>
-                                        </div>
-
-                                        {/* KOLOM 5: INFO KURSI & ACTION TOMBOL */}
-                                        <div className="p-5 border-t md:border-t-0 md:border-l border-dashed border-slate-200 flex flex-col justify-center gap-2 h-full bg-slate-950 text-white min-h-[110px]">
-                                            <div className="flex justify-between items-center md:flex-col md:items-start gap-1">
-                                                <div>
-                                                    <span className="block text-[8px] font-bold text-slate-500 uppercase tracking-wider">Kode Booking</span>
-                                                    <span className="text-xs font-black tracking-widest font-mono text-indigo-400">{booking.bookingCode}</span>
-                                                </div>
-                                                <div className="md:mt-1">
-                                                    <span className="text-[8px] font-bold text-slate-500 uppercase tracking-wider block md:hidden">Kursi</span>
-                                                    <div className="flex gap-1 flex-wrap md:mt-0.5">
-                                                        {booking.bookingSeats.map((bs) => (
-                                                            <span key={bs.id} className="text-[9px] font-black text-white bg-white/10 px-1.5 py-0.5 rounded">
-                                                                {bs.flightSeat.seatNumber}
-                                                            </span>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {/* ACCORDION DETAIL PENUMPANG */}
-                                            <details className="mt-1 group/details bg-slate-900 border border-slate-800 rounded-lg overflow-hidden transition-all duration-300">
-                                                <summary className="flex items-center justify-between gap-2 px-2.5 py-1.5 text-[8px] font-bold text-slate-400 uppercase tracking-wider cursor-pointer list-none select-none hover:text-white transition-colors">
-                                                    <span>Manifes Penumpang</span>
-                                                    <span className="text-[7px] font-bold bg-white/15 px-1.5 py-0.5 rounded">BUKA</span>
-                                                </summary>
-                                                <div className="px-2.5 pb-2 pt-1 border-t border-white/5 flex flex-col gap-1.5 bg-slate-950 max-h-[140px] overflow-y-auto">
-                                                    {booking.bookingSeats.map((bs) => (
-                                                        <div key={bs.id} className="flex justify-between items-center text-[9px] text-slate-300 border-b border-white/5 pb-1 last:border-0 last:pb-0">
-                                                            <div className="pr-1.5 text-left">
-                                                                <span className="block font-black uppercase text-white truncate max-w-[120px]">{bs.passengerName}</span>
-                                                                <span className="text-[7px] text-slate-500 font-medium leading-none">{bs.passengerNik} &bull; {bs.passengerGender === "MALE" ? "L" : "P"}</span>
-                                                            </div>
-                                                            <span className="rounded bg-white/10 px-1.5 py-0.5 text-[8px] font-black text-white shrink-0">
-                                                                {bs.flightSeat.seatNumber}
-                                                            </span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </details>
-
-                                            {/* ACTION BUTTON AREA */}
-                                            <div className="mt-1 border-t border-white/5 pt-2">
-                                                <BookingAction
-                                                    bookingId={booking.id}
-                                                    initialStatus={booking.status}
-                                                    initialPaymentStatus={booking.payment?.paymentStatus || "UNPAID"}
-                                                    bookingCode={booking.bookingCode}
-                                                />
-                                            </div>
-                                        </div>
-
+                                        {/* Status badge */}
+                                        <span className={`flex items-center gap-1 text-[9px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full shrink-0 ${badgeClass}`}>
+                                            {icon}
+                                            {label}
+                                        </span>
                                     </div>
 
-                                    {/* DEKORASI LUBANG TIKET */}
-                                    <div className="absolute left-[79.5%] -top-2 w-4 h-4 bg-[#F8FAFC] border-b border-slate-200 rounded-full z-20 hidden md:block"></div>
-                                    <div className="absolute left-[79.5%] -bottom-2 w-4 h-4 bg-[#F8FAFC] border-t border-slate-200 rounded-full z-20 hidden md:block"></div>
+                                    {/* Divider: boarding pass style */}
+                                    <div className="relative flex items-center mx-5">
+                                        <div className="absolute -left-8 w-5 h-5 rounded-full bg-slate-50 border border-slate-200" />
+                                        <div className="flex-1 border-t border-dashed border-slate-200" />
+                                        <div className="absolute -right-8 w-5 h-5 rounded-full bg-slate-50 border border-slate-200" />
+                                    </div>
+
+                                    {/* Middle: flight details */}
+                                    <div className="px-5 py-3 grid grid-cols-2 gap-x-6 gap-y-2.5 sm:grid-cols-4">
+                                        <div>
+                                            <span className="block text-[9px] font-black uppercase tracking-wider text-slate-400">Maskapai</span>
+                                            <span className="text-xs font-bold text-slate-700 mt-0.5 block">{flight.plane.airline.name}</span>
+                                        </div>
+                                        <div>
+                                            <span className="block text-[9px] font-black uppercase tracking-wider text-slate-400">Tanggal</span>
+                                            <span className="text-xs font-bold text-slate-700 mt-0.5 block">{formatDate(flight.departureTime)}</span>
+                                        </div>
+                                        <div>
+                                            <span className="block text-[9px] font-black uppercase tracking-wider text-slate-400">Berangkat</span>
+                                            <span className="text-base font-black text-slate-900 mt-0.5 block">{formatTime(flight.departureTime)}</span>
+                                        </div>
+                                        <div>
+                                            <span className="block text-[9px] font-black uppercase tracking-wider text-slate-400">Tiba</span>
+                                            <span className="text-base font-black text-slate-900 mt-0.5 block">{formatTime(flight.arrivalTime)}</span>
+                                        </div>
+                                        <div>
+                                            <span className="block text-[9px] font-black uppercase tracking-wider text-slate-400">Penumpang</span>
+                                            <span className="text-xs font-bold text-slate-700 mt-0.5 block">{booking.bookingSeats.length} orang</span>
+                                        </div>
+                                        <div>
+                                            <span className="block text-[9px] font-black uppercase tracking-wider text-slate-400">Kursi</span>
+                                            <span className="text-xs font-bold text-slate-700 font-mono mt-0.5 block">
+                                                {booking.bookingSeats.map(s => s.flightSeat.seatNumber).join(", ")}
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <span className="block text-[9px] font-black uppercase tracking-wider text-slate-400">Kode Booking</span>
+                                            <span className="text-xs font-black text-indigo-600 font-mono mt-0.5 block">{booking.bookingCode}</span>
+                                        </div>
+                                        <div>
+                                            <span className="block text-[9px] font-black uppercase tracking-wider text-slate-400">Total Bayar</span>
+                                            <span className="text-xs font-black text-slate-900 mt-0.5 block">
+                                                Rp {(Number(booking.totalPrice) + 50000).toLocaleString("id-ID")}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* Bottom: action bar */}
+                                    <div className="border-t border-slate-100 bg-slate-50/70 px-5 py-3">
+                        {/* Boarding status badge */}
+                        <div className="mb-2">
+                            {booking.status === BookingStatus.CONFIRMED ? (
+                                booking.isBoarded ? (
+                                    <span className="inline-flex items-center gap-1 rounded-full border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-emerald-700">
+                                        <CheckCircle2 className="w-3 h-3" />
+                                        Boarding Selesai
+                                    </span>
+                                ) : (
+                                    <span className="inline-flex items-center gap-1 rounded-full border border-indigo-100 bg-indigo-50 px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-indigo-700">
+                                        <Clock className="w-3 h-3" />
+                                        Siap Boarding
+                                    </span>
+                                )
+                            ) : null}
+                        </div>
+                        <BookingAction
+                            bookingId={booking.id}
+                            initialStatus={booking.status}
+                            initialPaymentStatus={payStatus}
+                            bookingCode={booking.bookingCode}
+                            initialIsBoarded={booking.isBoarded}
+                        />
+                                    </div>
                                 </div>
                             );
-                        })
-                    )}
-                </div>
-
-                {/* FOOTER INFO */}
-                <p className="text-center text-[10px] text-slate-400 mt-12 font-medium">
-                    Menampilkan riwayat pemesanan 6 bulan terakhir.<br />
-                    Butuh bantuan? <span className="text-indigo-500 font-bold">Hubungi Customer Service RENGGO</span>
-                </p>
-
+                        })}
+                    </div>
+                )}
             </div>
         </div>
     );

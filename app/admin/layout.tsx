@@ -13,7 +13,8 @@ import {
   LogOut,
   ShieldCheck,
   Menu,
-  X
+  X,
+  Users
 } from "lucide-react";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -59,6 +60,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { name: "Bandara", href: "/admin/airports", icon: MapPin },
     { name: "Maskapai", href: "/admin/airlines", icon: Building2 },
     { name: "Penerbangan", href: "/admin/flights", icon: Calendar },
+    { name: "Pengguna", href: "/admin/users", icon: Users },
   ];
 
   return (

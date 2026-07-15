@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { ChevronRight, QrCode, RefreshCw, Trash2, X } from "lucide-react";
+import { ChevronRight, QrCode, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import QRCode from "react-qr-code";
 
@@ -11,12 +11,13 @@ interface BookingActionProps {
     initialStatus: string;
     initialPaymentStatus: string;
     bookingCode: string;
+    initialIsBoarded?: boolean;
 }
 
-export default function BookingAction({ bookingId, initialStatus, initialPaymentStatus, bookingCode }: BookingActionProps) {
+export default function BookingAction({ bookingId, initialStatus, initialPaymentStatus, bookingCode, initialIsBoarded = false }: BookingActionProps) {
     const [status, setStatus] = useState(initialStatus);
     const [paymentStatus, setPaymentStatus] = useState(initialPaymentStatus);
-    const [isLoading, setIsLoading] = useState(false);
+    const [isBoarded, setIsBoarded] = useState(initialIsBoarded);
     const [isDeleting, setIsDeleting] = useState(false);
     const [showModal, setShowModal] = useState(false);
 
@@ -29,37 +30,6 @@ export default function BookingAction({ bookingId, initialStatus, initialPayment
             window.history.replaceState({}, document.title, window.location.pathname);
         }
     }, []);
-
-    const handleCheckStatus = async () => {
-        setIsLoading(true);
-        try {
-            const res = await fetch("/api/bookings/check-status", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ bookingId }),
-            });
-            const data = await res.json();
-
-            if (!res.ok) {
-                alert(data.message || data.error || "Gagal mengecek status booking.");
-                return;
-            }
-
-            if (data.status === "CONFIRMED") {
-                setStatus("CONFIRMED");
-                window.location.reload();
-            } else if (data.paymentStatus === "PAID") {
-                setPaymentStatus("PAID");
-                alert(data.message || "Pembayaran diterima. Menunggu konfirmasi staff.");
-            } else {
-                alert(data.message || "Belum dibayar nih, silakan bayar dulu.");
-            }
-        } catch (err) {
-            console.error(err);
-        } finally {
-            setIsLoading(false);
-        }
-    };
 
     const handleDeleteBooking = async () => {
         if (!confirm("Hapus booking ini? Kursi akan tersedia kembali untuk dipesan.")) return;
@@ -127,6 +97,13 @@ export default function BookingAction({ bookingId, initialStatus, initialPayment
                                 />
                             </div>
 
+                            <div className="mt-4 text-xs font-semibold text-slate-500">
+                                {isBoarded ? (
+                                    <span className="text-emerald-600">✓ Boarding Selesai</span>
+                                ) : (
+                                    <span className="text-indigo-600">⏳ Siap Boarding - Tunjukkan QR ke petugas</span>
+                                )}
+                            </div>
                             <div className="text-sm font-mono font-black tracking-widest text-indigo-600 uppercase bg-indigo-50 py-2 rounded-xl border border-indigo-100/50">
                                 KODE: {bookingCode || 'N/A'}
                             </div>
@@ -141,17 +118,9 @@ export default function BookingAction({ bookingId, initialStatus, initialPayment
         if (paymentStatus === "PAID") {
             return (
                 <div className="flex flex-col gap-1.5">
-                    <div className="w-full text-center bg-sky-500/15 text-sky-200 border border-sky-400/20 text-[9px] font-black py-1.5 px-3 rounded-lg uppercase tracking-wider">
-                        Menunggu Staff
+                    <div className="w-full text-center bg-sky-50 text-sky-700 border border-sky-200 text-[9px] font-black py-1.5 px-3 rounded-lg uppercase tracking-wider">
+                        Menunggu Konfirmasi Staff
                     </div>
-                    <button
-                        onClick={handleCheckStatus}
-                        disabled={isLoading}
-                        className="w-full flex items-center justify-center gap-1 bg-white/10 hover:bg-white/20 text-white text-[9px] font-black py-1.5 px-3 rounded-lg transition-colors uppercase tracking-wider text-center disabled:opacity-50 cursor-pointer"
-                    >
-                        <RefreshCw className={`w-2.5 h-2.5 ${isLoading ? "animate-spin" : ""}`} />
-                        {isLoading ? "Checking..." : "Cek Konfirmasi"}
-                    </button>
                 </div>
             );
         }
@@ -160,24 +129,15 @@ export default function BookingAction({ bookingId, initialStatus, initialPayment
             <div className="flex flex-col gap-1.5">
                 <Link
                     href={`/bookings/${bookingId}/checkout`}
-                    className="w-full flex items-center justify-center gap-1 bg-white/10 hover:bg-white/20 text-indigo-300 text-[9px] font-black py-1.5 px-3 rounded-lg transition-colors uppercase tracking-wider text-center"
+                    className="w-full flex items-center justify-center gap-1 bg-indigo-600 hover:bg-indigo-700 text-white text-[9px] font-black py-1.5 px-3 rounded-lg transition-colors uppercase tracking-wider text-center"
                 >
-                    Bayar <ChevronRight className="w-3 h-3" />
+                    Bayar Sekarang <ChevronRight className="w-3 h-3" />
                 </Link>
-
-                <button
-                    onClick={handleCheckStatus}
-                    disabled={isLoading}
-                    className="w-full flex items-center justify-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[9px] font-black py-1.5 px-3 rounded-lg transition-colors uppercase tracking-wider text-center disabled:opacity-50 cursor-pointer"
-                >
-                    <RefreshCw className={`w-2.5 h-2.5 ${isLoading ? "animate-spin" : ""}`} />
-                    {isLoading ? "Checking..." : "Cek Status"}
-                </button>
 
                 <button
                     onClick={handleDeleteBooking}
                     disabled={isDeleting}
-                    className="w-full flex items-center justify-center gap-1 bg-rose-500/15 hover:bg-rose-500/25 text-rose-200 text-[9px] font-black py-1.5 px-3 rounded-lg transition-colors uppercase tracking-wider text-center disabled:opacity-50 cursor-pointer"
+                    className="w-full flex items-center justify-center gap-1 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 text-[9px] font-black py-1.5 px-3 rounded-lg transition-colors uppercase tracking-wider text-center disabled:opacity-50 cursor-pointer"
                 >
                     <Trash2 className="w-2.5 h-2.5" />
                     {isDeleting ? "Menghapus..." : "Hapus"}
@@ -187,8 +147,8 @@ export default function BookingAction({ bookingId, initialStatus, initialPayment
     }
 
     return (
-        <span className="text-[9px] font-black text-slate-500 uppercase tracking-wider block text-center">
-            Expired
+        <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block text-center py-0.5">
+            Tidak Aktif
         </span>
     );
 }

@@ -15,6 +15,7 @@ const withPWA = withPWAInit({
 
 const nextConfig: NextConfig = {
   /* Isikan konfigurasi bawaan projek kamu di sini jika sebelumnya sudah ada */
+  output: "standalone",
   turbopack: {},
 };
 

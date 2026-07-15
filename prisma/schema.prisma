@@ -169,6 +169,7 @@ model Booking {
   flightId      Int
   totalPrice    Decimal       @db.Decimal(12, 2)
   status        BookingStatus @default(PENDING)
+  isBoarded     Boolean       @default(false) // Status boarding penumpang
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 

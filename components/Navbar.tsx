@@ -10,6 +10,9 @@ export default function Navbar() {
   const pathname = usePathname();
   const shouldHideNavbar = pathname.startsWith("/auth") || pathname.startsWith("/admin") || pathname.startsWith("/manager") || pathname.startsWith("/staff");
 
+  // Server ID - untuk demonstrasi load balancing
+  const serverId = process.env.NEXT_PUBLIC_SERVER_ID || "1";
+
   // 1. STATE AUTHENTICATION (Kini otomatis sinkron dengan API Backend)
   const [user, setUser] = useState<{ name: string; email: string; role: string } | null>(null);
 
@@ -111,6 +114,11 @@ export default function Navbar() {
           : "bg-transparent"
         }`}
     >
+      {/* Server Identifier - untuk demonstrasi load balancing */}
+      <div className="fixed top-2 right-2 bg-gray-800 text-white px-3 py-1 rounded-full text-xs font-bold z-[100] shadow-lg">
+        Server: {serverId}
+      </div>
+
       <div className="mx-auto max-w-5xl px-4">
         <div className="flex h-10 items-center justify-between">
 
