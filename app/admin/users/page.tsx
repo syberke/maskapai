@@ -2,9 +2,12 @@ import prisma from "@/lib/prisma";
 import { getSessionFromCookie } from "@/lib/auth";
 import { Role } from "@prisma/client";
 import { redirect } from "next/navigation";
+import { connection } from "next/server";
 import UserClient from "./UserClient";
 
 export default async function AdminUsersPage() {
+  await connection();
+
   const session = await getSessionFromCookie();
   if (!session || session.role !== Role.ADMIN) redirect("/");
 
