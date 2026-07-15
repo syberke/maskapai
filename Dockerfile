@@ -1,38 +1,80 @@
-# =====================================
-# DOCKERFILE UNTUK FLIGHT BOOKING BAZMA
-# (Versi Simple - 1 Stage Aja)
-# =====================================
+# syntax=docker/dockerfile:1
 
-# Kita pake Node.js versi 20 (Alpine biar kecil ukurannya)
-FROM node:20-alpine
+# =====================================
+# DEPENDENCIES
+# =====================================
+FROM node:20-bookworm-slim AS deps
 
-# Set folder kerja di dalam container
 WORKDIR /app
+ENV NEXT_TELEMETRY_DISABLED=1
 
-# Install OpenSSL (dibutuhkan Prisma)
-RUN apk add --no-cache openssl
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends openssl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
-# 1. Copy file package.json dan package-lock.json dulu
 COPY package.json package-lock.json ./
-
-# 2. Install semua dependencies (npm ci lebih cepet dari npm install)
 RUN npm ci
 
-# 3. Copy Prisma schema dan generate client
-COPY prisma ./prisma
-RUN npx prisma generate
+# =====================================
+# DATABASE MIGRATION IMAGE
+# =====================================
+FROM deps AS migrate
 
-# 4. Copy semua file project
+COPY prisma ./prisma
+COPY prisma.config.ts ./
+
+# Prisma Client generation only needs a syntactically valid URL here.
+# The real runtime DATABASE_URL is injected by Docker Compose.
+RUN DATABASE_URL="postgresql://postgres:postgres@postgres:5432/maskapai?schema=public" npx prisma generate
+
+CMD ["npx", "prisma", "migrate", "deploy"]
+
+# =====================================
+# NEXT.JS BUILD
+# =====================================
+FROM deps AS builder
+
+ARG NEXT_PUBLIC_RECAPTCHA_SITE_KEY
+ARG NEXT_PUBLIC_MIDTRANS_CLIENT_KEY
+ARG NEXT_PUBLIC_APP_URL
+
+ENV NEXT_PUBLIC_RECAPTCHA_SITE_KEY=${NEXT_PUBLIC_RECAPTCHA_SITE_KEY}
+ENV NEXT_PUBLIC_MIDTRANS_CLIENT_KEY=${NEXT_PUBLIC_MIDTRANS_CLIENT_KEY}
+ENV NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
+
+# Prevent Prisma generate / build-time imports from failing because .env
+# is intentionally excluded from the Docker build context.
+ENV DATABASE_URL="postgresql://postgres:postgres@postgres:5432/maskapai?schema=public"
+
 COPY . .
 
-# 5. Copy .env.example jadi .env (bisa di-overwrite pas jalanin container)
-COPY .env.example .env
-
-# 6. Build project Next.js
+RUN npx prisma generate
 RUN npm run build
 
-# 7. Port yang dipake aplikasi
+# =====================================
+# PRODUCTION RUNTIME
+# =====================================
+FROM node:20-bookworm-slim AS runner
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV HOSTNAME=0.0.0.0
+ENV PORT=3000
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends openssl ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --system --gid 1001 nodejs \
+    && useradd --system --uid 1001 --gid nodejs nextjs
+
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+USER nextjs
+
 EXPOSE 3000
 
-# 8. Perintah jalanin app: migrasi dulu, baru start
-CMD ["sh", "-c", "npx prisma migrate deploy && npx prisma db seed --skip-generate || true && node server.js"]
+CMD ["node", "server.js"]
