@@ -1,8 +1,11 @@
 // app/admin/page.tsx
 import prisma from "@/lib/prisma";
+import { connection } from "next/server";
 import { Plane, Building2, MapPin, Ticket } from "lucide-react";
 
 export default async function AdminDashboardPage() {
+  await connection();
+
   const airportCount = await prisma.airport.count();
   const airlineCount = await prisma.airline.count();
   const flightCount = await prisma.flight.count();
@@ -32,13 +35,11 @@ export default async function AdminDashboardPage() {
 
   return (
     <div className="space-y-8">
-      {/* HEADER SECTION */}
       <div>
         <h1 className="text-2xl font-black text-slate-900 tracking-tight">Overview Dashboard</h1>
         <p className="text-xs text-slate-500 font-medium mt-1">Status statistik data logistik maskapai penerbangan secara langsung.</p>
       </div>
 
-      {/* METRIC GRID */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {cards.map((card, idx) => {
           const Icon = card.icon;
@@ -57,7 +58,6 @@ export default async function AdminDashboardPage() {
         })}
       </div>
 
-      {/* RECENT BOOKINGS TABLE */}
       <div className="bg-white border border-slate-200/60 rounded-2xl overflow-hidden shadow-xs">
         <div className="p-5 border-b border-slate-100 flex items-center justify-between">
           <div>
