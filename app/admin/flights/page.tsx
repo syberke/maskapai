@@ -1,7 +1,10 @@
 import prisma from "@/lib/prisma";
+import { connection } from "next/server";
 import FlightClient from "./FlightClient";
 
 export default async function FlightsAdminPage() {
+  await connection();
+
   const [flights, airports, airlines] = await Promise.all([
     prisma.flight.findMany({
       orderBy: { departureTime: "desc" },
