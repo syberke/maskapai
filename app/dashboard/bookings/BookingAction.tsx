@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ChevronRight, Loader2, QrCode, Trash2, X } from "lucide-react";
+import { ChevronRight, Loader2, QrCode, RefreshCw, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import QRCode from "react-qr-code";
 import { passengerGenderLabel } from "@/lib/passengerManifest";
@@ -28,6 +28,7 @@ type ManifestSeat = {
 
 type BookingDetailResponse = {
     bookingSeats?: ManifestSeat[];
+    message?: string;
 };
 
 export default function BookingAction({
@@ -37,9 +38,6 @@ export default function BookingAction({
     bookingCode,
     initialIsBoarded = false,
 }: BookingActionProps) {
-    const [status] = useState(initialStatus);
-    const [paymentStatus] = useState(initialPaymentStatus);
-    const [isBoarded] = useState(initialIsBoarded);
     const [isDeleting, setIsDeleting] = useState(false);
     const [showModal, setShowModal] = useState(false);
     const [manifest, setManifest] = useState<ManifestSeat[]>([]);
@@ -54,17 +52,23 @@ export default function BookingAction({
     }, []);
 
     useEffect(() => {
-        if (!showModal || manifest.length > 0 || manifestLoading) return;
+        if (
+            !showModal ||
+            manifest.length > 0 ||
+            manifestLoading ||
+            manifestError
+        ) {
+            return;
+        }
 
         async function loadManifest() {
             setManifestLoading(true);
-            setManifestError("");
 
             try {
                 const response = await fetch(`/api/bookings?id=${bookingId}`, {
                     cache: "no-store",
                 });
-                const data = (await response.json()) as BookingDetailResponse & { message?: string };
+                const data = (await response.json()) as BookingDetailResponse;
 
                 if (!response.ok) {
                     setManifestError(data.message || "Manifest gagal dimuat.");
@@ -81,7 +85,12 @@ export default function BookingAction({
         }
 
         loadManifest();
-    }, [bookingId, manifest.length, manifestLoading, showModal]);
+    }, [bookingId, manifest.length, manifestError, manifestLoading, showModal]);
+
+    const retryManifest = () => {
+        setManifest([]);
+        setManifestError("");
+    };
 
     const handleDeleteBooking = async () => {
         if (!confirm("Hapus booking ini? Kursi akan tersedia kembali untuk dipesan.")) return;
@@ -105,7 +114,7 @@ export default function BookingAction({
         }
     };
 
-    if (status === "CONFIRMED") {
+    if (initialStatus === "CONFIRMED") {
         return (
             <>
                 <button
@@ -168,9 +177,16 @@ export default function BookingAction({
                                         <Loader2 className="h-4 w-4 animate-spin" /> Memuat manifest
                                     </div>
                                 ) : manifestError ? (
-                                    <p className="rounded-lg bg-rose-50 px-3 py-4 text-center text-[10px] font-bold text-rose-700">
-                                        {manifestError}
-                                    </p>
+                                    <div className="rounded-lg bg-rose-50 px-3 py-4 text-center">
+                                        <p className="text-[10px] font-bold text-rose-700">{manifestError}</p>
+                                        <button
+                                            type="button"
+                                            onClick={retryManifest}
+                                            className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-3 py-1.5 text-[9px] font-black uppercase tracking-wider text-white"
+                                        >
+                                            <RefreshCw className="h-3 w-3" /> Coba Lagi
+                                        </button>
+                                    </div>
                                 ) : manifest.length === 0 ? (
                                     <p className="py-6 text-center text-[10px] font-bold text-slate-400">
                                         Manifest penumpang belum tersedia.
@@ -207,7 +223,7 @@ export default function BookingAction({
                             </div>
 
                             <div className="mt-4 text-center text-xs font-semibold text-slate-500">
-                                {isBoarded ? (
+                                {initialIsBoarded ? (
                                     <span className="text-emerald-600">✓ Boarding Selesai</span>
                                 ) : (
                                     <span className="text-indigo-600">⏳ Siap Boarding, tunjukkan QR ke petugas</span>
@@ -220,8 +236,8 @@ export default function BookingAction({
         );
     }
 
-    if (status === "PENDING") {
-        if (paymentStatus === "PAID") {
+    if (initialStatus === "PENDING") {
+        if (initialPaymentStatus === "PAID") {
             return (
                 <div className="w-full rounded-lg border border-sky-200 bg-sky-50 px-3 py-1.5 text-center text-[9px] font-black uppercase tracking-wider text-sky-700">
                     Menunggu Konfirmasi Staff
