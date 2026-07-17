@@ -231,7 +231,6 @@ export async function GET(request: Request) {
                 payment: true,
                 bookingSeats: {
                     include: { flightSeat: true },
-                    orderBy: { flightSeat: { seatNumber: "asc" } },
                 },
                 flight: {
                     include: {
