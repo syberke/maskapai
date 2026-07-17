@@ -38,12 +38,10 @@ export default function SeatMapWrapper({ initialSeats, maxPassengers, flightId }
     const selectedSeats = useMemo(() => {
         return selectedSeatIds
             .map((id) => initialSeats.find((seat) => seat.id === id))
-            .filter(Boolean)
+            .filter((seat): seat is Seat => Boolean(seat))
             .sort((left, right) =>
-                (left as Seat).seatNumber.localeCompare((right as Seat).seatNumber, "id", {
-                    numeric: true,
-                }),
-            ) as Seat[];
+                left.seatNumber.localeCompare(right.seatNumber, "id", { numeric: true }),
+            );
     }, [initialSeats, selectedSeatIds]);
 
     const handleSelectionChange = (ids: number[]) => {
@@ -59,10 +57,10 @@ export default function SeatMapWrapper({ initialSeats, maxPassengers, flightId }
         });
     };
 
-    const updatePassenger = (
+    const updatePassenger = <Field extends keyof PassengerDraft>(
         seatId: number,
-        field: keyof PassengerDraft,
-        value: string,
+        field: Field,
+        value: PassengerDraft[Field],
     ) => {
         setPassengersBySeatId((current) => ({
             ...current,
@@ -185,7 +183,13 @@ export default function SeatMapWrapper({ initialSeats, maxPassengers, flightId }
                                         />
                                         <select
                                             value={passenger.gender}
-                                            onChange={(event) => updatePassenger(seat.id, "gender", event.target.value)}
+                                            onChange={(event) =>
+                                                updatePassenger(
+                                                    seat.id,
+                                                    "gender",
+                                                    event.target.value as PassengerDraft["gender"],
+                                                )
+                                            }
                                             className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold text-slate-700 outline-none focus:border-indigo-400"
                                         >
                                             <option value="">Pilih gender</option>
