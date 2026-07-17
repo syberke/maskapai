@@ -1,10 +1,12 @@
 "use client";
 
-// components/SeatMapWrapper.tsx
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-// 🎯 FIX: Path dikoreksi dari ".././components/SeatMaps" menjadi "./SeatMaps" karena sekarang posisinya satu folder berdampingan
 import SeatMap from "./SeatMaps";
+import {
+    isPassengerGender,
+    type PassengerGender,
+} from "@/lib/passengerManifest";
 
 type Seat = {
     id: number;
@@ -13,47 +15,89 @@ type Seat = {
     isAvailable: boolean;
 };
 
+type PassengerDraft = {
+    name: string;
+    nik: string;
+    gender: "" | PassengerGender;
+};
+
 interface SeatMapWrapperProps {
     initialSeats: Seat[];
     maxPassengers: number;
-    flightId: number; // Menangkap ID penerbangan dari halaman server
+    flightId: number;
 }
+
+const emptyPassenger = (): PassengerDraft => ({ name: "", nik: "", gender: "" });
 
 export default function SeatMapWrapper({ initialSeats, maxPassengers, flightId }: SeatMapWrapperProps) {
     const [selectedSeatIds, setSelectedSeatIds] = useState<number[]>([]);
-    const [passengers, setPassengers] = useState(
-        Array.from({ length: maxPassengers }).map(() => ({ name: "", nik: "", gender: "" }))
-    );
+    const [passengersBySeatId, setPassengersBySeatId] = useState<Record<number, PassengerDraft>>({});
     const [isLoading, setIsLoading] = useState(false);
     const router = useRouter();
 
     const selectedSeats = useMemo(() => {
-        return selectedSeatIds.map((id) => initialSeats.find((seat) => seat.id === id)).filter(Boolean) as Seat[];
+        return selectedSeatIds
+            .map((id) => initialSeats.find((seat) => seat.id === id))
+            .filter((seat): seat is Seat => Boolean(seat))
+            .sort((left, right) =>
+                left.seatNumber.localeCompare(right.seatNumber, "id", { numeric: true }),
+            );
     }, [initialSeats, selectedSeatIds]);
 
     const handleSelectionChange = (ids: number[]) => {
         setSelectedSeatIds(ids);
-        console.log("State kursi tersimpan di Client:", ids);
+        setPassengersBySeatId((current) => {
+            const next: Record<number, PassengerDraft> = {};
+
+            ids.forEach((seatId) => {
+                next[seatId] = current[seatId] ?? emptyPassenger();
+            });
+
+            return next;
+        });
     };
 
-    const updatePassenger = (index: number, field: "name" | "nik" | "gender", value: string) => {
-        setPassengers((current) =>
-            current.map((passenger, passengerIndex) =>
-                passengerIndex === index ? { ...passenger, [field]: value } : passenger
-            )
-        );
+    const updatePassenger = <Field extends keyof PassengerDraft>(
+        seatId: number,
+        field: Field,
+        value: PassengerDraft[Field],
+    ) => {
+        setPassengersBySeatId((current) => ({
+            ...current,
+            [seatId]: {
+                ...(current[seatId] ?? emptyPassenger()),
+                [field]: value,
+            },
+        }));
     };
 
     const handleBookingSubmit = async () => {
-        if (selectedSeatIds.length !== maxPassengers) return;
+        if (selectedSeats.length !== maxPassengers) {
+            alert(`Pilih tepat ${maxPassengers} kursi untuk ${maxPassengers} penumpang.`);
+            return;
+        }
 
-        const selectedPassengers = passengers.slice(0, maxPassengers);
-        const isPassengerDataComplete = selectedPassengers.every((passenger) => {
-            return passenger.name.trim() && /^\d{8,20}$/.test(passenger.nik.trim()) && ["MALE", "FEMALE"].includes(passenger.gender);
+        const passengerManifest = selectedSeats.map((seat) => {
+            const passenger = passengersBySeatId[seat.id] ?? emptyPassenger();
+
+            return {
+                seatId: seat.id,
+                name: passenger.name.trim(),
+                nik: passenger.nik.trim(),
+                gender: passenger.gender,
+            };
+        });
+
+        const isPassengerDataComplete = passengerManifest.every((passenger) => {
+            return (
+                passenger.name.length >= 2 &&
+                /^\d{8,20}$/.test(passenger.nik) &&
+                isPassengerGender(passenger.gender)
+            );
         });
 
         if (!isPassengerDataComplete) {
-            alert("Lengkapi nama, NIK, dan gender untuk semua penumpang.");
+            alert("Lengkapi nama, NIK 8-20 digit, dan gender untuk semua penumpang.");
             return;
         }
 
@@ -64,10 +108,10 @@ export default function SeatMapWrapper({ initialSeats, maxPassengers, flightId }
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    flightId: flightId,
-                    seatIds: selectedSeatIds,
+                    flightId,
+                    seatIds: selectedSeats.map((seat) => seat.id),
                     passengersCount: maxPassengers,
-                    passengers: selectedPassengers,
+                    passengers: passengerManifest,
                 }),
             });
 
@@ -75,17 +119,13 @@ export default function SeatMapWrapper({ initialSeats, maxPassengers, flightId }
 
             if (!response.ok) {
                 alert(data.message || "Gagal mengunci kursi.");
-                if (response.status === 409) {
-                    router.refresh();
-                }
+                if (response.status === 409) router.refresh();
                 return;
             }
 
-            // Sukses langsung lempar ke halaman checkout
             router.push(`/bookings/${data.bookingId}/checkout`);
-
-        } catch (err) {
-            console.error(err);
+        } catch (error) {
+            console.error(error);
             alert("Koneksi bermasalah atau terjadi gangguan sistem.");
         } finally {
             setIsLoading(false);
@@ -100,59 +140,80 @@ export default function SeatMapWrapper({ initialSeats, maxPassengers, flightId }
                 onSelectionChange={handleSelectionChange}
             />
 
-            {selectedSeatIds.length > 0 && (
-                <div className="w-full bg-white border border-slate-200 rounded-xl p-4 shadow-sm max-w-xl mx-auto">
+            {selectedSeats.length > 0 && (
+                <div className="mx-auto w-full max-w-xl rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                     <div className="mb-3">
-                        <h3 className="font-bold text-slate-900 text-sm">Data Penumpang</h3>
-                        <p className="text-[10px] text-slate-400 font-medium mt-0.5">Isi sesuai identitas untuk manifest staff.</p>
+                        <h3 className="text-sm font-bold text-slate-900">Data Penumpang</h3>
+                        <p className="mt-0.5 text-[10px] font-medium text-slate-400">
+                            Setiap identitas terikat langsung ke nomor kursi untuk manifest staf.
+                        </p>
                     </div>
 
                     <div className="flex flex-col gap-3">
-                        {selectedSeats.map((seat, index) => (
-                            <div key={seat.id} className="rounded-lg border border-slate-100 bg-slate-50/70 p-3">
-                                <div className="mb-2 flex items-center justify-between gap-2">
-                                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-700">Penumpang {index + 1}</span>
-                                    <span className="rounded-md bg-slate-950 px-2 py-0.5 text-[9px] font-black text-white">{seat.seatNumber}</span>
+                        {selectedSeats.map((seat, index) => {
+                            const passenger = passengersBySeatId[seat.id] ?? emptyPassenger();
+
+                            return (
+                                <div key={seat.id} className="rounded-lg border border-slate-100 bg-slate-50/70 p-3">
+                                    <div className="mb-2 flex items-center justify-between gap-2">
+                                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-700">
+                                            Penumpang {index + 1}
+                                        </span>
+                                        <span className="rounded-md bg-slate-950 px-2 py-0.5 text-[9px] font-black text-white">
+                                            Kursi {seat.seatNumber}
+                                        </span>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+                                        <input
+                                            value={passenger.name}
+                                            onChange={(event) => updatePassenger(seat.id, "name", event.target.value)}
+                                            placeholder="Nama lengkap"
+                                            autoComplete="name"
+                                            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] font-medium text-slate-900 outline-none focus:border-indigo-400"
+                                        />
+                                        <input
+                                            value={passenger.nik}
+                                            onChange={(event) =>
+                                                updatePassenger(seat.id, "nik", event.target.value.replace(/\D/g, "").slice(0, 20))
+                                            }
+                                            placeholder="NIK 8-20 digit"
+                                            inputMode="numeric"
+                                            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] font-medium text-slate-900 outline-none focus:border-indigo-400"
+                                        />
+                                        <select
+                                            value={passenger.gender}
+                                            onChange={(event) =>
+                                                updatePassenger(
+                                                    seat.id,
+                                                    "gender",
+                                                    event.target.value as PassengerDraft["gender"],
+                                                )
+                                            }
+                                            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold text-slate-700 outline-none focus:border-indigo-400"
+                                        >
+                                            <option value="">Pilih gender</option>
+                                            <option value="MALE">Laki-laki</option>
+                                            <option value="FEMALE">Perempuan</option>
+                                        </select>
+                                    </div>
                                 </div>
-                                <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
-                                    <input
-                                        value={passengers[index]?.name || ""}
-                                        onChange={(event) => updatePassenger(index, "name", event.target.value)}
-                                        placeholder="Nama lengkap"
-                                        className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] font-medium text-slate-900 outline-none focus:border-indigo-400"
-                                    />
-                                    <input
-                                        value={passengers[index]?.nik || ""}
-                                        onChange={(event) => updatePassenger(index, "nik", event.target.value.replace(/\D/g, ""))}
-                                        placeholder="NIK"
-                                        inputMode="numeric"
-                                        className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] font-medium text-slate-900 outline-none focus:border-indigo-400"
-                                    />
-                                    <select
-                                        value={passengers[index]?.gender || ""}
-                                        onChange={(event) => updatePassenger(index, "gender", event.target.value)}
-                                        className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold text-slate-700 outline-none focus:border-indigo-400"
-                                    >
-                                        <option value="">Gender</option>
-                                        <option value="MALE">Laki-laki</option>
-                                        <option value="FEMALE">Perempuan</option>
-                                    </select>
-                                </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </div>
             )}
 
-            {/* ACTION TOMBOL DI LEVEL CLIENT */}
-            {selectedSeatIds.length === maxPassengers && (
+            {selectedSeats.length === maxPassengers && (
                 <button
+                    type="button"
                     disabled={isLoading}
                     onClick={handleBookingSubmit}
-                    className={`w-full bg-slate-950 hover:bg-slate-900 text-white text-[11px] font-bold py-2 rounded-lg shadow-md transition-all active:scale-[0.99] ${isLoading ? "opacity-60 cursor-not-allowed" : ""
-                        }`}
+                    className={`w-full rounded-lg bg-slate-950 py-2 text-[11px] font-bold text-white shadow-md transition-all hover:bg-slate-900 active:scale-[0.99] ${
+                        isLoading ? "cursor-not-allowed opacity-60" : ""
+                    }`}
                 >
-                    {isLoading ? "Mengunci Kursi Pilihan..." : "Konfirmasi & Lanjut Pembayaran"}
+                    {isLoading ? "Menyimpan Manifest & Mengunci Kursi..." : "Konfirmasi Data & Lanjut Pembayaran"}
                 </button>
             )}
         </div>

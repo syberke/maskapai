@@ -2,11 +2,25 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { ArrowLeft, ClipboardCheck, LogOut, Menu, ShieldCheck, X } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import {
+  ArrowLeft,
+  BarChart3,
+  ClipboardCheck,
+  LogOut,
+  Menu,
+  ShieldCheck,
+  X,
+} from "lucide-react";
+
+const navItems = [
+  { href: "/staff", label: "Operasional", icon: ClipboardCheck },
+  { href: "/staff/report", label: "Report", icon: BarChart3 },
+];
 
 export default function StaffLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [staffName, setStaffName] = useState("Staff");
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
@@ -35,9 +49,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   const handleLogout = async () => {
     try {
       const res = await fetch("/api/auth/logout", { method: "POST" });
-      if (res.ok) {
-        router.push("/auth/login");
-      }
+      if (res.ok) router.push("/auth/login");
     } catch (error) {
       console.error(error);
     }
@@ -66,6 +78,30 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
           </button>
 
           <div className="hidden items-center gap-2 md:flex">
+            <nav className="mr-2 flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1">
+              {navItems.map((item) => {
+                const Icon = item.icon;
+                const active = item.href === "/staff"
+                  ? pathname === "/staff"
+                  : pathname.startsWith(item.href);
+
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[9px] font-black uppercase tracking-wider transition-colors ${
+                      active
+                        ? "bg-white text-sky-700 shadow-sm"
+                        : "text-slate-500 hover:text-slate-900"
+                    }`}
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </nav>
+
             <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
               <div className="flex h-7 w-7 items-center justify-center rounded-full bg-sky-100 text-[10px] font-black uppercase text-sky-700">
                 {staffName.substring(0, 2)}
@@ -93,6 +129,16 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
               <span className="text-[10px] font-black uppercase tracking-wider text-slate-900">{staffName}</span>
             </div>
             <div className="flex flex-col gap-2">
+              {navItems.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setIsMobileOpen(false)}
+                  className="text-[10px] font-black uppercase tracking-wider text-slate-600"
+                >
+                  {item.label}
+                </Link>
+              ))}
               <Link href="/" onClick={() => setIsMobileOpen(false)} className="text-[10px] font-black uppercase tracking-wider text-slate-600">
                 Beranda
               </Link>

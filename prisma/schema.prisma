@@ -164,12 +164,12 @@ model FlightSeat {
 
 model Booking {
   id            Int           @id @default(autoincrement())
-  bookingCode   String        @unique @db.VarChar(100) // Kode Booking Unik untuk PWA / QR Code
+  bookingCode   String        @unique @db.VarChar(100)
   userId        Int
   flightId      Int
   totalPrice    Decimal       @db.Decimal(12, 2)
   status        BookingStatus @default(PENDING)
-  isBoarded     Boolean       @default(false) // Status boarding penumpang
+  isBoarded     Boolean       @default(false)
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
@@ -183,29 +183,29 @@ model Booking {
 }
 
 model BookingSeat {
-  id             Int        @id @default(autoincrement())
-  bookingId      Int
-  flightSeatId   Int
-  passengerName  String     @db.VarChar(255) // Data Manifest Penumpang (Penting untuk E-Ticket)
-  passengerNik   String     @db.VarChar(20)  // NIK untuk validasi manifes penerbangan resmi
-  passengerGender String?   @db.VarChar(20)
-  createdAt      DateTime   @default(now())
+  id              Int        @id @default(autoincrement())
+  bookingId       Int
+  flightSeatId    Int
+  passengerName   String     @db.VarChar(255)
+  passengerNik    String     @db.VarChar(20)
+  passengerGender String     @default("UNKNOWN") @db.VarChar(20)
+  createdAt       DateTime   @default(now())
 
   // Relasi Induk
   booking        Booking    @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   flightSeat     FlightSeat @relation(fields: [flightSeatId], references: [id], onDelete: Cascade)
 
-  // Constraint Unik Gabungan: Menghindari manifest kursi yang sama didaftarkan ganda pada satu booking ID
+  // Satu kursi hanya memiliki satu identitas penumpang di dalam booking yang sama.
   @@unique([bookingId, flightSeatId])
 }
 
 model Payment {
   id            Int           @id @default(autoincrement())
-  bookingId     Int           @unique // One-to-One dengan Booking
+  bookingId     Int           @unique
   invoiceNumber String        @unique @db.VarChar(100)
   amount        Decimal       @db.Decimal(12, 2)
   paymentStatus PaymentStatus @default(UNPAID)
-  snapToken     String?       @db.Text // Token dari Midtrans Snap API
+  snapToken     String?       @db.Text
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
